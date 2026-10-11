@@ -1,0 +1,68 @@
+name: Coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+            name: "macOS 26 AppleClang 21 [Coverage]",
+            os: macos-26,
+            cxx: "/usr/bin/clang++"
+          }
+          - {
+            name: "Ubuntu 24.04 GCC 13 [Coverage]",
+            os: ubuntu-24.04,
+            cxx: "g++-13"
+          }
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Set up sccache
+      uses: mozilla-actions/sccache-action@v0.0.11
+      with:
+        version: "v0.18.0"
+
+    - name: Get macOS Concurrency
+      if: runner.os == 'macOS'
+      run: echo NPROC="sysctl -n hw.ncpu" >> $GITHUB_ENV
+
+    - name: Get Linux Concurrency
+      if: runner.os == 'Linux'
+      run: echo NPROC="nproc" >> $GITHUB_ENV
+
+    - name: Set Up macOS Dependencies
+      if: runner.os == 'macOS'
+      run: brew install ninja pkg-config
+
+    - name: Set Up Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build pkg-config lcov g++-13
+
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{runner.workspace}}/build
+
+    - name: Configure CMake
+      working-directory: ${{runner.workspace}}/build
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja -DCOVERAGE=ON -DWARNINGS_AS_ERRORS=ON
+
+    - name: Build, Test and Generate Code Coverage
+      working-directory: ${{runner.workspace}}/build
+      run: cmake --build . --parallel $($NPROC) --target coverage
