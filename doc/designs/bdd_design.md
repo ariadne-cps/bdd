@@ -166,7 +166,37 @@ The manager is currently append-only. Concurrent reclamation would require subst
 
 Not implemented.
 
-The API must avoid promises that would prevent future reordering, but the first milestones use a fixed numeric order. Reordering will only be considered after the core concurrent implementation is stable and benchmarked.
+Dynamic variable reordering is a planned optional manager capability rather than a separate BDD abstraction.
+
+The design should keep one public BDD API and one semantic model while allowing two internal ordering policies:
+
+```text
+common BDD algorithms
+       |
+       +-- fixed ordering
+       |     |
+       |     +-- N-tree/grid-paving storage
+       |
+       +-- dynamic ordering
+             |
+             +-- SAT/general-purpose BDD workloads
+```
+
+The fixed-order path should not pay a branch or permutation lookup on every hot recursive step merely because dynamic reordering exists elsewhere in the library. An implementation based on internal policy specialization, or another equivalent zero/near-zero-overhead mechanism, is preferred over repeatedly checking a runtime `reordering_enabled` flag inside ITE/apply/quantification.
+
+Before dynamic reordering is introduced, the implementation must separate stable logical variable identity from ordering level:
+
+```text
+BddVariable identity != ordering level
+```
+
+For a fixed-order manager, identity and level may use the same numeric representation as a fast path. For a reorderable manager, the implementation may maintain variable-to-level and level-to-variable mappings, or store the current level directly in nodes while retaining a separate logical-identity mapping. The latter should be evaluated because a reorder already requires rebuilding/recanonicalizing affected structure and it may keep normal recursive comparisons direct.
+
+The public `Bdd` type should remain common to both modes. The choice of ordering policy should be made when the manager/context is created and should not require distinct `FixedBdd` and `DynamicBdd` user-facing types.
+
+Dynamic reordering also has a concurrency consequence. Normal BDD operations should remain concurrent, whereas a reorder is expected to require an exclusive manager phase: active operations must reach a safe point, the ordering and canonical structures are rebuilt, computed caches are invalidated as needed, and concurrent operations resume afterwards.
+
+Reordering will only be implemented after the concurrent core is stable and benchmarked, and enabling it must be explicit.
 
 ## 7. SAT layer roadmap
 
@@ -217,7 +247,9 @@ The historical BuDDy-backed implementation requires more than ordinary Boolean o
 - a fused conjunction-plus-existential operation analogous to BuDDy's `bdd_appex(..., bddop_and, ...)`, because projection uses this pattern;
 - efficient traversal in the presence of skipped variables.
 
-Variable indices correspond naturally to N-tree subdivision levels. Fixed increasing variable order is therefore not merely an initial implementation choice for this use case: it is part of the path semantics. Dynamic reordering must never be enabled transparently for an N-tree-backed client.
+Variable indices correspond naturally to N-tree subdivision levels. Fixed increasing variable order is therefore part of the path semantics for this use case.
+
+The general BDD library may support dynamic variable reordering, but N-tree/grid-paving storage must use a manager/context configured with fixed natural ordering. That fixed configuration should use the dedicated fast path and should make reordering unavailable rather than merely relying on the caller never to request it.
 
 ### Manager ownership and concurrency
 
@@ -563,6 +595,23 @@ Decision:
 - fixed numeric variable order must be preservable as path semantics;
 - the manager/context must be shareable by many sets;
 - structural traversal, renaming and quantification move ahead of the SAT-specific layer in the implementation roadmap.
+
+### 2026-10-11 - Fixed versus reorderable manager architecture
+
+The reordering design was refined to avoid both unnecessary duplication and avoidable runtime overhead.
+
+Decision:
+
+- do not build two independent BDD implementations;
+- retain one public `Bdd` API and one set of Boolean/structural semantics;
+- allow distinct internal ordering policies for fixed and dynamically reorderable managers;
+- the fixed-order implementation should have a specialized hot path with no repeated reordering flag checks and, where possible, no variable-to-level lookup;
+- the reorderable implementation must distinguish logical variable identity from current ordering level;
+- N-tree/grid-paving storage will always use the fixed natural-order manager and must not permit reordering;
+- SAT/general-purpose BDD workloads may opt into dynamic reordering when measurements justify it;
+- a dynamic reorder on a concurrent manager is expected to be an exclusive/quiescent phase rather than an operation interleaved freely with ordinary recursive BDD updates.
+
+The preferred architecture is therefore policy separation inside one library, not separate `FixedBdd` and `DynamicBdd` user-facing types and not a per-operation runtime boolean branch.
 
 ### Next milestone
 
