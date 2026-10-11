@@ -346,6 +346,18 @@ Permanent CI remains:
 
 The bootstrap branch is ready to be fast-forwarded into `main`.
 
+### 2026-10-11 - Symbolic frontend boundary
+
+Decision:
+
+- the BDD repository remains independent of `ariadne-cps/kernel` and does not import Kernel's symbolic expression implementation;
+- Kernel's existing `symbolic` layer will be reused later as the frontend for Ariadne expressions and predicates;
+- the first integration path remains `ContinuousPredicate -> SmtBooleanEncoding -> BDD/SAT`, so the BDD backend can be compared fairly with the existing CDCL-style backend on the same Boolean encoding;
+- after that baseline is established, a direct `ContinuousPredicate -> BDD` frontend may be added in Kernel to preserve Boolean structure and avoid unnecessary Tseitin variables when beneficial;
+- BDD itself should not grow a second rich Boolean expression AST duplicating Kernel's symbolic facilities.
+
+This keeps the core BDD representation index-based and reusable while preserving the richer named-variable, expression, substitution and traversal facilities already available in Kernel.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
