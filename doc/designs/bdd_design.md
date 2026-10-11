@@ -274,6 +274,30 @@ Verification status:
 - CI is the first external compile/test verification for the new repository;
 - performance has not yet been measured, so the coarse mutex and ordered maps must not be treated as acceptable final structures.
 
+### 2026-10-11 - First CI failure: Utility include-order dependency
+
+Observed:
+
+- Unix release, ThreadSanitizer and coverage builds reached compilation and failed in `utility/binary_word.hpp`;
+- `binary_word.hpp` uses `StringType` and `StringStream`, but those names were not visible when BDD included that header before `utility/typedefs.hpp`;
+- the resulting parser errors also made the `make_binary_word("00")` test calls appear to have the wrong argument type.
+
+Resolution:
+
+- BDD now includes `utility/typedefs.hpp` before `utility/binary_word.hpp`;
+- no change was made to Utility in this milestone, because the BDD repository should not mutate a transitive dependency merely to complete its bootstrap.
+
+What this tells us:
+
+- the initial ROBDD source itself passes a local strict-warning syntax build when the Ariadne types are supplied;
+- the first CI failure was an integration/include-order problem, not yet evidence of a ROBDD algorithm failure.
+
+Still to verify:
+
+- full Unix build and tests after the include-order fix;
+- Windows configuration failure, which occurred before compilation and may be independent;
+- ThreadSanitizer runtime behavior.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;

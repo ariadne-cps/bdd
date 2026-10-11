@@ -22,8 +22,8 @@
 #include <utility>
 #include <vector>
 
-#include "utility/binary_word.hpp"
 #include "utility/typedefs.hpp"
+#include "utility/binary_word.hpp"
 
 namespace Ariadne {
 
