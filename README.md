@@ -4,6 +4,7 @@
 [![Unix](https://github.com/ariadne-cps/bdd/actions/workflows/unix.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/unix.yml)
 [![Windows](https://github.com/ariadne-cps/bdd/actions/workflows/win.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/win.yml)
 [![Coverage](https://github.com/ariadne-cps/bdd/actions/workflows/coverage.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/coverage.yml)
+[![codecov](https://codecov.io/gh/ariadne-cps/bdd/branch/main/graph/badge.svg)](https://codecov.io/gh/ariadne-cps/bdd)
 
 Ariadne BDD is the standalone C++20 binary decision diagram layer for Ariadne. The current implementation provides a minimal reduced ordered BDD manager with canonical nodes, ITE-based Boolean operations, evaluation and a thread-safe baseline implementation.
 
