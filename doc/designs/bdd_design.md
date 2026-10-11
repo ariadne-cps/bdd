@@ -457,6 +457,30 @@ Testing and tutorials:
 - Unix and Windows CI install Python 3.13 and pytest, enforce Python tests, run C++ and Python tests separately, execute the standalone C++ tutorial and execute the Python tutorial;
 - ThreadSanitizer explicitly disables Python bindings so the sanitizer job remains focused on the C++ concurrency core.
 
+### 2026-10-11 - N-Queens benchmark
+
+Added `benchmarks/benchmark_nqueens.cpp` and the standard Ariadne benchmark CMake target wiring.
+
+The benchmark solves N-Queens for `n=5,6,7` by building the complete ROBDD of satisfying board assignments.
+
+Encoding:
+
+- one Boolean variable per board square;
+- exactly one queen in each row;
+- no two queens in the same column;
+- no two queens on the same diagonal.
+
+Each board size uses a fresh `BddManager`, so its timing is independent of unique/computed-table contents from previous runs.
+
+Timing and reporting:
+
+- elapsed construction time is measured with `Stopwatch<Microseconds>`;
+- results are reported in milliseconds through Ariadne logging;
+- the benchmark also records the manager's allocated non-terminal node count;
+- a false final BDD is treated as an error, since N-Queens is satisfiable for 5, 6 and 7.
+
+This benchmark intentionally measures full symbolic solution-set construction, not merely discovery of the first satisfying placement.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
