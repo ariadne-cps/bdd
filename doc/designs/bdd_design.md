@@ -428,6 +428,35 @@ CI now validates the installed-library usage on Unix and Windows:
 
 Source attribution was also normalized so that BDD source files created in this repository use `Luca Geretti` rather than `Ariadne contributors`.
 
+### 2026-10-11 - Python bindings and tutorial parity
+
+Added Python support following the standalone Ariadne binding pattern.
+
+Build structure:
+
+- `BUILD_PYTHON_BINDINGS` defaults to ON;
+- `ss/python-common` supplies the shared pybind11 support layer;
+- the standalone module is named `pyariadne`, consistent with the other Ariadne repositories;
+- the module incorporates BDD and required transitive object code so that it is self-contained at link time;
+- `PYTHON_ENFORCE_TESTS=ON` requires Python >= 3.11 and pytest.
+
+Initial exported API:
+
+- `BddManager`;
+- `Bdd`;
+- `BddVariable`;
+- `BinaryWord`;
+- constants, variables, negation, conjunction, disjunction, exclusive-or, ITE, evaluation and node count.
+
+Python-created `Bdd` values keep their originating manager alive through pybind11 lifetime policies, matching the non-owning C++ handle contract.
+
+Testing and tutorials:
+
+- a small pytest smoke test checks canonical variables, commutative conjunction and the XOR truth table;
+- `python/tutorials/tutorial_bdd.py` reproduces the C++ tutorial section-for-section;
+- Unix and Windows CI install Python 3.13 and pytest, enforce Python tests, run C++ and Python tests separately, execute the standalone C++ tutorial and execute the Python tutorial;
+- ThreadSanitizer explicitly disables Python bindings so the sanitizer job remains focused on the C++ concurrency core.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;

@@ -46,6 +46,13 @@ jobs:
       with:
         version: "v0.18.0"
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python Test Dependencies
+      run: python -m pip install pytest
+
     - name: Get macOS Concurrency
       if: runner.os == 'macOS'
       run: |
@@ -71,15 +78,19 @@ jobs:
 
     - name: Configure CMake
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_CXX_COMPILER=${{matrix.config.cxx-cmd}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja -DWARNINGS_AS_ERRORS=ON
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_CXX_COMPILER=${{matrix.config.cxx-cmd}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=ON
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
       run: cmake --build . --parallel $($NPROC) --target everything
 
-    - name: Test
+    - name: Test C++
       working-directory: ${{runner.workspace}}/build
-      run: ctest -j $($NPROC) --output-on-failure
+      run: ctest -j $($NPROC) -LE python --output-on-failure
+
+    - name: Test Python
+      working-directory: ${{runner.workspace}}/build
+      run: ctest -L python -V --output-on-failure
 
     - name: Install Ariadne BDD
       working-directory: ${{runner.workspace}}/build
@@ -96,6 +107,12 @@ jobs:
         export LD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${LD_LIBRARY_PATH:-}
         export DYLD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${DYLD_LIBRARY_PATH:-}
         ./build/tutorial_bdd
+
+    - name: Check Python BDD Tutorial
+      working-directory: ${{ github.workspace }}/python/tutorials
+      env:
+        PYTHONPATH: ${{ runner.workspace }}/build/python
+      run: python tutorial_bdd.py
 
     - name: Verify Final Installation
       working-directory: ${{runner.workspace}}/build
@@ -123,7 +140,7 @@ jobs:
 
     - name: Configure CMake
       working-directory: ${{runner.workspace}}/build-tsan
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-16 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DTHREAD_SANITIZER=ON -G Ninja -DWARNINGS_AS_ERRORS=ON
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-16 -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DTHREAD_SANITIZER=ON -DBUILD_PYTHON_BINDINGS=OFF -G Ninja -DWARNINGS_AS_ERRORS=ON
 
     - name: Build
       working-directory: ${{runner.workspace}}/build-tsan

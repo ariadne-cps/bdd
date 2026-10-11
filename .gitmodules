@@ -4,3 +4,6 @@
 [submodule "ss/threading"]
 	path = ss/threading
 	url = https://github.com/ariadne-cps/threading
+[submodule "ss/python-common"]
+	path = ss/python-common
+	url = https://github.com/ariadne-cps/python-common

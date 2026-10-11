@@ -18,6 +18,8 @@ The project is intentionally independent of Ariadne Kernel, Foundation, Numeric,
 - Evaluation under a total binary assignment.
 - Thread-safe manager operations using a coarse-grained mutex baseline.
 - A concurrent canonical-construction regression test.
+- Python bindings for the current core BDD API.
+- C++ and Python tutorials exercised on Unix and Windows CI.
 - Unix, Windows, coverage and ThreadSanitizer CI configurations.
 
 The current unique table and computed table are deliberately simple ordered maps protected by one mutex. They are a correctness baseline, not the intended final concurrent implementation.
@@ -28,8 +30,9 @@ The repository contains these direct Git submodules:
 
 - `ss/configuration` -> [ariadne-cps/configuration](https://github.com/ariadne-cps/configuration)
 - `ss/threading` -> [ariadne-cps/threading](https://github.com/ariadne-cps/threading)
+- `ss/python-common` -> [ariadne-cps/python-common](https://github.com/ariadne-cps/python-common), used only to build the Python bindings
 
-Clone recursively so that Threading's own dependencies are also initialized.
+Clone recursively so that all transitive dependencies and pybind11 are initialized.
 
 ## Build
 
@@ -43,9 +46,15 @@ cmake --build . --parallel
 ctest --output-on-failure
 ```
 
-A C++20 compiler and CMake are required.
+A C++20 compiler and CMake are required. Python bindings are built by default when a compatible Python development environment is available; set `-DBUILD_PYTHON_BINDINGS=OFF` to disable them.
 
-## Tutorial
+## Python bindings
+
+The standalone build produces the `pyariadne` module when Python 3.11 or newer and the Python development headers are available. The current binding exposes `BddManager`, `Bdd`, `BddVariable` and `BinaryWord`.
+
+Python tests use pytest. Configure with `-DPYTHON_ENFORCE_TESTS=ON` when Python and pytest must be present.
+
+## Tutorials
 
 A standalone C++ tutorial is available in `tutorials/tutorial_bdd`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
 
@@ -57,7 +66,9 @@ cmake --build tutorial-build
 ./tutorial-build/tutorial_bdd
 ```
 
-The Unix and Windows CI jobs build and execute the tutorial against the installed library as a consumer smoke test.
+A matching Python tutorial is available in `python/tutorials/tutorial_bdd.py`. It reproduces the same sequence of examples using the Python bindings.
+
+The Unix and Windows CI jobs build and execute both tutorials.
 
 ## ThreadSanitizer
 

@@ -37,20 +37,31 @@ jobs:
       with:
         version: "v0.18.0"
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+
+    - name: Install Python Test Dependencies
+      run: python -m pip install pytest
+
     - name: Create Build Environment
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Configure CMake
       working-directory: ${{runner.workspace}}/build
-      run: cmake ${{runner.workspace}}/bdd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWARNINGS_AS_ERRORS=ON
+      run: cmake ${{runner.workspace}}/bdd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=ON
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
       run: cmake --build . --parallel --target everything
 
-    - name: Test
+    - name: Test C++
       working-directory: ${{runner.workspace}}/build
-      run: ctest --output-on-failure
+      run: ctest -LE python -V --timeout 30
+
+    - name: Test Python
+      working-directory: ${{runner.workspace}}/build
+      run: ctest -L python -V --timeout 30
 
     - name: Install Ariadne BDD
       working-directory: ${{runner.workspace}}/build
@@ -68,6 +79,13 @@ jobs:
         cmake --build build --parallel
         $env:PATH = "${{runner.workspace}}\install\bin;$env:PATH"
         & ".\build\tutorial_bdd.exe"
+
+    - name: Check Python BDD Tutorial
+      shell: pwsh
+      working-directory: ${{ github.workspace }}/python/tutorials
+      run: |
+        $env:PYTHONPATH = "${{ runner.workspace }}\build\python"
+        python tutorial_bdd.py
 
     - name: Verify Final Installation
       working-directory: ${{runner.workspace}}/build

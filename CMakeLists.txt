@@ -4,6 +4,7 @@ project(Bdd VERSION 1.0)
 
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(THREAD_SANITIZER "Enable ThreadSanitizer" OFF)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/ss/configuration/cmake/ProjectOptions.cmake")
     message(FATAL_ERROR
@@ -72,6 +73,10 @@ setup_standalone_project_tests(
         "${PROJECT_SOURCE_DIR}/include"
         "${PROJECT_SOURCE_DIR}/src"
 )
+
+if(BUILD_PYTHON_BINDINGS)
+    add_subdirectory(python)
+endif()
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     ariadne_install_dependency_bundle(
