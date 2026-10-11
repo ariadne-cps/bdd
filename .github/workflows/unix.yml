@@ -81,6 +81,10 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       run: ctest -j $($NPROC) --output-on-failure
 
+    - name: Install Ariadne BDD
+      working-directory: ${{runner.workspace}}/build
+      run: cmake --install . --prefix ${{runner.workspace}}/install
+
   thread-sanitizer:
     name: Ubuntu 24.04 Clang 16 [ThreadSanitizer]
     runs-on: ubuntu-24.04

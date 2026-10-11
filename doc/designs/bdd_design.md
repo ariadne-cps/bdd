@@ -376,6 +376,35 @@ Resolution:
 
 Linux continues to build and generate coverage but does not upload it, matching the current Ariadne repository convention.
 
+### 2026-10-11 - Workflow parity audit
+
+A full comparison was made against the current workflows in Threading, Utility and Interval after the missing Codecov upload was discovered.
+
+Relevant omission found:
+
+- Unix and Windows builds compiled and tested BDD but did not exercise the install rules;
+- most installable Ariadne libraries, including Utility, Foundation, Numeric, Interval, Algebra and Kernel, run `cmake --install` in their normal CI workflows;
+- Threading currently does not, so using it as the only workflow template had hidden this check.
+
+Resolution:
+
+- Unix now installs Ariadne BDD to `${{runner.workspace}}/install` after tests;
+- Windows performs the same install smoke test;
+- this verifies that the public headers, library target and bundled dependency installation rules are actually usable.
+
+Intentionally not copied from Interval:
+
+- Python setup/tests, because BDD has no Python bindings;
+- vcpkg/GMP/MPFR setup, because BDD has no Numeric dependency;
+- tutorial build/run steps, because no BDD tutorial exists yet;
+- the second "Verify Final Installation" pass used after tutorial checks, because BDD currently has no intermediate tutorial/install mutation that requires a second installation.
+
+Other differences reviewed and retained:
+
+- the Unix macOS runner version is not functionally required to match Interval's runner;
+- the libffi-related `PKG_CONFIG_PATH` setup seen in some lightweight repositories is not required by the current BDD dependency graph;
+- Coverage now matches the established lightweight Ariadne pattern, including macOS Codecov upload.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
