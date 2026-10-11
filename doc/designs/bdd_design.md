@@ -358,6 +358,24 @@ Decision:
 
 This keeps the core BDD representation index-based and reusable while preserving the richer named-variable, expression, substitution and traversal facilities already available in Kernel.
 
+### 2026-10-11 - macOS Codecov upload restored
+
+Observed:
+
+- the BDD coverage workflow generated `coverage.info` successfully but stopped after the CMake `coverage` target;
+- unlike the established Threading/Interval/Numeric/Algebra workflows, it did not invoke Codecov at all;
+- the macOS dependency list also omitted `gnupg`, which is part of the working Codecov setup used by the sibling repositories.
+
+Resolution:
+
+- `.github/workflows/coverage.yml` is now aligned with the Threading coverage workflow;
+- macOS installs `gnupg`;
+- the workflow verifies that `CODECOV_TOKEN` is available;
+- macOS uploads `${{runner.workspace}}/build/coverage.info` with `codecov/codecov-action@v7.1.1`;
+- upload failures are configured to fail CI rather than being silently ignored.
+
+Linux continues to build and generate coverage but does not upload it, matching the current Ariadne repository convention.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
