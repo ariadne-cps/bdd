@@ -331,6 +331,21 @@ Decision:
 
 This supersedes the earlier ad-hoc Windows source-path fix. The lesson is to prefer an existing Ariadne sibling workflow over introducing a locally equivalent variant.
 
+### 2026-10-11 - Bootstrap diagnostics removed before merge
+
+The temporary `.github/workflows/diagnostic.yml` workflow has been removed.
+
+It was introduced only to surface build/configuration logs while debugging the initial CI bootstrap and is not part of the repository's permanent CI design.
+
+Permanent CI remains:
+
+- Unix release builds;
+- ThreadSanitizer;
+- Windows release build;
+- coverage.
+
+The bootstrap branch is ready to be fast-forwarded into `main`.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
