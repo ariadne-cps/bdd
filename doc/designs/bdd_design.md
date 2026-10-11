@@ -6,7 +6,12 @@ This is the living design manual for `ariadne-cps/bdd`. It also records the chro
 
 Ariadne BDD provides a standalone C++20 implementation of reduced ordered binary decision diagrams (ROBDDs) for the Ariadne ecosystem.
 
-The first downstream application is a BDD-backed SAT solver intended for integration with the Boolean layer of `ariadne-cps/kernel`. The BDD library itself must not depend on Kernel and should remain reusable by other Ariadne repositories.
+Two downstream applications motivate the library:
+
+- a BDD-backed SAT solver intended for integration with the Boolean layer of `ariadne-cps/kernel`;
+- a concurrent canonical representation for binary N-tree/grid-paving structures, replacing the BuDDy-backed `BDDTreeSet` approach used in `ariadne-cps/release-1.0`.
+
+The BDD library itself must not depend on Kernel and should remain reusable by other Ariadne repositories.
 
 The long-term goal is a genuinely concurrent BDD implementation. Concurrency is treated as an architectural property rather than as a collection of ad-hoc asynchronous calls.
 
@@ -190,7 +195,65 @@ This representation is intended to support incremental clause addition naturally
 
 The first Kernel integration should consume the existing CNF emitted by `SmtBooleanEncoding`. This permits direct comparison with Kernel's existing CDCL-style Boolean backend before considering a direct `ContinuousPredicate -> BDD` encoding.
 
-## 8. Testing strategy
+## 8. N-tree and grid-paving representation
+
+A second primary use case is the internal representation of binary N-trees and grid pavings.
+
+Historical reference:
+
+- `ariadne-cps/release-1.0/src/bdd_set.cpp` implements `BDDTreeSet` on top of BuDDy;
+- `ariadne-cps/release-1.0/src/grid_set.cpp` implements the analogous structure explicitly with mutable `BinaryTreeNode` objects.
+
+The BDD representation is attractive because ROBDD reduction performs structural recombination automatically. A skipped variable represents identical descendants, and a terminal `true` or `false` can represent an entire uniform subtree. In the historical BDD implementation, `mince` therefore changes the logical interpretation depth without physically expanding the diagram, while `recombine` simply drops that artificial mince depth. The explicit grid tree instead allocates/splits nodes and must explicitly recombine equal leaf subtrees.
+
+The historical BuDDy-backed implementation requires more than ordinary Boolean operators. The new BDD library must eventually provide equivalents for:
+
+- terminal tests and canonical equality;
+- inspection of the top variable and low/high cofactors;
+- construction from a variable and two branches;
+- support extraction;
+- order-preserving variable shifts and general renaming/replacement;
+- existential quantification;
+- a fused conjunction-plus-existential operation analogous to BuDDy's `bdd_appex(..., bddop_and, ...)`, because projection uses this pattern;
+- efficient traversal in the presence of skipped variables.
+
+Variable indices correspond naturally to N-tree subdivision levels. Fixed increasing variable order is therefore not merely an initial implementation choice for this use case: it is part of the path semantics. Dynamic reordering must never be enabled transparently for an N-tree-backed client.
+
+### Manager ownership and concurrency
+
+N-tree sets that participate in union, intersection, difference or projection must share one canonical BDD universe. A separate manager per set would make ordinary set algebra impossible without an expensive cross-manager import operation.
+
+The intended model is therefore:
+
+```text
+shared BddManager / BddContext
+       |
+       +-- NTree A -> immutable Bdd root
+       +-- NTree B -> immutable Bdd root
+       +-- NTree C -> immutable Bdd root
+```
+
+The immutable BDD roots are suitable for concurrent reads and snapshot-style updates. Higher-level mutable N-tree objects may replace their root after an operation, but the BDD nodes themselves remain immutable.
+
+This use case strengthens the requirement that one shared manager scale under concurrent operations. The current single mutex is only a correctness baseline; sharded unique/computed tables and structured parallel recursion are required before claiming an advantage over BuDDy.
+
+Garbage collection and lifetime become more important for long-running paving computations than for short SAT benchmarks. Reclamation must nevertheless be introduced only after the concurrent node/publication model is stable.
+
+### Migration target
+
+A future Ariadne grid-set integration should reproduce the semantic behavior of the historical `BDDTreeSet`, not its BuDDy API. The geometric/grid layer should depend on Ariadne BDD abstractions rather than exposing BuDDy-like global functions.
+
+Compatibility tests should be derived from the historical `test_bdd_set.cpp` cases and compare, where applicable, against the explicit `GridTreeSet` implementation for:
+
+- empty/full sets;
+- height increase/minimization;
+- mince/recombine semantics;
+- union/intersection/difference;
+- subset/disjoint/overlap predicates;
+- enabled-cell iteration;
+- projection to selected dimensions.
+
+## 9. Testing strategy
 
 Every structural optimization must preserve the existing semantic tests.
 
@@ -208,7 +271,7 @@ Required test families:
 
 Tests must not rely on numeric node identifiers being identical across separate managers or across future concurrent allocation schedules.
 
-## 9. Benchmark strategy
+## 10. Benchmark strategy
 
 The benchmark suite will eventually record:
 
@@ -229,7 +292,7 @@ Workloads should include:
 
 A BDD backend is not expected to dominate CDCL on generic SAT instances. Its value must be demonstrated on structured formulas, repeated/incremental constraints, model-set operations and SMT theory-nogood refinement.
 
-## 10. Development history
+## 11. Development history
 
 ### 2026-10-11 - Repository bootstrap
 
@@ -481,16 +544,39 @@ Timing and reporting:
 
 This benchmark intentionally measures full symbolic solution-set construction, not merely discovery of the first satisfying placement.
 
+### 2026-10-11 - N-tree/grid-paving use case
+
+The historical `BDDTreeSet` and `GridTreeSet` implementations in `ariadne-cps/release-1.0` were compared.
+
+Key observations:
+
+- `BDDTreeSet` uses BuDDy as a canonical compressed representation of an adaptive binary tree, not only as a Boolean formula package;
+- missing BDD levels encode repeated identical subtrees, making structural recombination implicit in ROBDD reduction;
+- the explicit `GridTreeSet` physically allocates, splits and recombines `BinaryTreeNode` objects;
+- the BuDDy implementation relies on structural traversal (`var/low/high`), support extraction, variable replacement/shifting and existential quantification;
+- projection uses a fused apply-and-existential operation followed by variable renaming;
+- BuDDy's process-global state is incompatible with the desired concurrent use, whereas Ariadne BDD should support many concurrent N-tree operations sharing one manager.
+
+Decision:
+
+- concurrent N-tree/grid-paving representation is now a first-class use case of Ariadne BDD alongside SAT/SMT;
+- fixed numeric variable order must be preservable as path semantics;
+- the manager/context must be shareable by many sets;
+- structural traversal, renaming and quantification move ahead of the SAT-specific layer in the implementation roadmap.
+
 ### Next milestone
 
-1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
-2. strengthen BDD tests with exhaustive/random truth tables;
-3. add instrumentation for unique-table and computed-table behavior;
-4. replace the coarse unique table with a sharded hash implementation;
-5. parallelize ITE above a tunable grain threshold;
-6. only then begin the BDD-backed SAT layer.
+1. strengthen BDD tests with exhaustive/random truth tables;
+2. add structural inspection APIs needed by N-tree traversal: top variable, low/high and support;
+3. add order-preserving variable shifting/renaming and existential quantification, including an optimized `and_exists` path;
+4. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
+5. add instrumentation for unique-table and computed-table behavior;
+6. replace the coarse unique table with a sharded hash implementation;
+7. parallelize ITE and the new structural operations above tunable grain thresholds;
+8. add N-tree compatibility/benchmark workloads derived from the historical `BDDTreeSet` and `GridTreeSet`;
+9. then begin the BDD-backed SAT layer on top of the now broader core API.
 
-## 11. Maintenance rule
+## 12. Maintenance rule
 
 Every substantial change should update this file in the same commit.
 
