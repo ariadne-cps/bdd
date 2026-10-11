@@ -298,6 +298,26 @@ Still to verify:
 - Windows configuration failure, which occurred before compilation and may be independent;
 - ThreadSanitizer runtime behavior.
 
+### 2026-10-11 - Windows CMake source-directory failure
+
+Observed:
+
+- the Windows workflow reached the CMake configure step but reported that the build directory did not contain `CMakeLists.txt`;
+- the command used `$GITHUB_WORKSPACE`, which is shell syntax valid in POSIX shells but not for PowerShell environment variables;
+- because the expression expanded to no source argument, CMake fell back to the current working directory, which is the build directory.
+
+Resolution:
+
+- the Windows workflow now uses GitHub's shell-independent expression `${{ github.workspace }}`;
+- configuration is explicit with `cmake -S "${{ github.workspace }}" -B .`.
+
+This avoids depending on PowerShell's `$env:GITHUB_WORKSPACE` syntax and keeps the workflow easier to compare with the Unix configuration.
+
+Still to verify:
+
+- Windows configuration and compilation after this workflow fix;
+- the BDD tests on Windows.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
