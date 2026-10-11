@@ -19,7 +19,8 @@ jobs:
         config:
           - {
             name: "Windows 2025 [Release]",
-            os: windows-2025
+            os: windows-2025,
+            build-type: "Release"
           }
     steps:
     - uses: actions/checkout@v3
@@ -41,7 +42,7 @@ jobs:
 
     - name: Configure CMake
       working-directory: ${{runner.workspace}}/build
-      run: cmake -S "${{ github.workspace }}" -B . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWARNINGS_AS_ERRORS=ON
+      run: cmake ${{runner.workspace}}/bdd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWARNINGS_AS_ERRORS=ON
 
     - name: Build
       working-directory: ${{runner.workspace}}/build

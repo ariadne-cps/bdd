@@ -318,6 +318,19 @@ Still to verify:
 - Windows configuration and compilation after this workflow fix;
 - the BDD tests on Windows.
 
+### 2026-10-11 - Windows workflow realigned with Threading
+
+The previous Windows fix was functionally valid but did not follow the repository convention closely enough.
+
+Decision:
+
+- `ariadne-cps/threading/.github/workflows/win.yml` is the canonical template for BDD at this stage;
+- BDD now copies that workflow structure directly;
+- the only repository-specific source-path change is `${{runner.workspace}}/threading` -> `${{runner.workspace}}/bdd`;
+- no vcpkg or Python setup is included, because BDD has neither Numeric dependencies nor Python bindings.
+
+This supersedes the earlier ad-hoc Windows source-path fix. The lesson is to prefer an existing Ariadne sibling workflow over introducing a locally equivalent variant.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
