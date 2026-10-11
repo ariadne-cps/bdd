@@ -85,6 +85,22 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       run: cmake --install . --prefix ${{runner.workspace}}/install
 
+    - name: Prepare C++ BDD Tutorial
+      run: cmake -E copy_directory $GITHUB_WORKSPACE/tutorials/tutorial_bdd ${{runner.workspace}}/tutorial_bdd
+
+    - name: Check C++ BDD Tutorial
+      working-directory: ${{runner.workspace}}/tutorial_bdd
+      run: |
+        cmake -S . -B build -DCMAKE_PREFIX_PATH=${{runner.workspace}}/install -DCMAKE_CXX_COMPILER=${{matrix.config.cxx-cmd}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja
+        cmake --build build --parallel $($NPROC)
+        export LD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${LD_LIBRARY_PATH:-}
+        export DYLD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${DYLD_LIBRARY_PATH:-}
+        ./build/tutorial_bdd
+
+    - name: Verify Final Installation
+      working-directory: ${{runner.workspace}}/build
+      run: cmake --install . --prefix ${{runner.workspace}}/verify-install
+
   thread-sanitizer:
     name: Ubuntu 24.04 Clang 16 [ThreadSanitizer]
     runs-on: ubuntu-24.04

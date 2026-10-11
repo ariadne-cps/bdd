@@ -45,6 +45,20 @@ ctest --output-on-failure
 
 A C++20 compiler and CMake are required.
 
+## Tutorial
+
+A standalone C++ tutorial is available in `tutorials/tutorial_bdd`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
+
+After installing Ariadne BDD to a prefix:
+
+```bash
+cmake -S tutorials/tutorial_bdd -B tutorial-build -DCMAKE_PREFIX_PATH=/path/to/install
+cmake --build tutorial-build
+./tutorial-build/tutorial_bdd
+```
+
+The Unix and Windows CI jobs build and execute the tutorial against the installed library as a consumer smoke test.
+
 ## ThreadSanitizer
 
 ```bash
@@ -54,14 +68,6 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DTHREAD_SANITIZER=ON
 cmake --build . --parallel
 ctest --output-on-failure
 ```
-
-## Design journal
-
-The living design document and development journal is maintained in:
-
-- `doc/designs/bdd_design.md`
-
-It records architectural decisions, implemented milestones, known limitations, failed approaches and the next planned steps.
 
 ## License
 

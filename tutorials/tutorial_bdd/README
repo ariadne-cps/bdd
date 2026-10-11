@@ -1,0 +1,20 @@
+This is a tutorial of Ariadne BDD, written as a simple self-contained example (SSCE).
+It is intentionally built as a standalone project and assumes that the ariadne-bdd library has already been installed.
+
+To compile and run the tutorial:
+
+1. mkdir build
+2. cd build
+3. cmake ..
+4. cmake --build .
+5. ./tutorial_bdd
+
+If Ariadne BDD was installed to a non-standard prefix, pass it when configuring:
+
+    cmake .. -DCMAKE_PREFIX_PATH=/path/to/ariadne-bdd/install
+
+On Windows with Ninja:
+
+    cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=C:/path/to/install
+    cmake --build build
+    .\build\tutorial_bdd.exe

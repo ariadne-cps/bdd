@@ -55,3 +55,20 @@ jobs:
     - name: Install Ariadne BDD
       working-directory: ${{runner.workspace}}/build
       run: cmake --install . --prefix "${{runner.workspace}}/install"
+
+    - name: Prepare C++ BDD Tutorial
+      shell: pwsh
+      run: cmake -E copy_directory "$env:GITHUB_WORKSPACE/tutorials/tutorial_bdd" "${{runner.workspace}}/tutorial_bdd"
+
+    - name: Check C++ BDD Tutorial
+      shell: pwsh
+      working-directory: ${{runner.workspace}}/tutorial_bdd
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{runner.workspace}}/install" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        cmake --build build --parallel
+        $env:PATH = "${{runner.workspace}}\install\bin;$env:PATH"
+        & ".\build\tutorial_bdd.exe"
+
+    - name: Verify Final Installation
+      working-directory: ${{runner.workspace}}/build
+      run: cmake --install . --prefix "${{runner.workspace}}/verify-install"

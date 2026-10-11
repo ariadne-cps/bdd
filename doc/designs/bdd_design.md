@@ -1,6 +1,6 @@
-# Ariadne BDD design and development journal
+# Ariadne BDD design
 
-This document is both the design manual for `ariadne-cps/bdd` and the chronological journal of its implementation. It should be updated whenever a design decision changes, a milestone is implemented, a benchmark changes our direction, or an attempted approach fails.
+This is the living design manual for `ariadne-cps/bdd`. It also records the chronological implementation history and should be updated whenever a design decision changes, a milestone is implemented, a benchmark changes our direction, or an attempted approach fails.
 
 ## 1. Purpose
 
@@ -229,7 +229,7 @@ Workloads should include:
 
 A BDD backend is not expected to dominate CDCL on generic SAT instances. Its value must be demonstrated on structured formulas, repeated/incremental constraints, model-set operations and SMT theory-nogood refinement.
 
-## 10. Development journal
+## 10. Development history
 
 ### 2026-10-11 - Repository bootstrap
 
@@ -405,6 +405,29 @@ Other differences reviewed and retained:
 - the libffi-related `PKG_CONFIG_PATH` setup seen in some lightweight repositories is not required by the current BDD dependency graph;
 - Coverage now matches the established lightweight Ariadne pattern, including macOS Codecov upload.
 
+### 2026-10-11 - Standalone C++ tutorial
+
+Added a standalone tutorial under `tutorials/tutorial_bdd`.
+
+The tutorial is a consumer of an installed Ariadne BDD rather than of the repository source tree. It demonstrates:
+
+- manager lifetime, constants and indexed variables;
+- canonical reuse of variables and equivalent Boolean functions;
+- conjunction, disjunction and negation;
+- equivalence between an expanded multiplexer and `ITE(x,y,z)`;
+- total-assignment evaluation through `BinaryWord`;
+- the reduction rule `ITE(x,y,y) == y`.
+
+CI now validates the installed-library usage on Unix and Windows:
+
+1. install Ariadne BDD to a temporary prefix;
+2. copy the tutorial outside the repository source tree;
+3. configure it with `CMAKE_PREFIX_PATH` pointing to the install prefix;
+4. build and execute the tutorial;
+5. perform a final installation pass.
+
+Source attribution was also normalized so that BDD source files created in this repository use `Luca Geretti` rather than `Ariadne contributors`.
+
 ### Next milestone
 
 1. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
@@ -414,11 +437,11 @@ Other differences reviewed and retained:
 5. parallelize ITE above a tunable grain threshold;
 6. only then begin the BDD-backed SAT layer.
 
-## 11. Journal maintenance rule
+## 11. Maintenance rule
 
 Every substantial change should update this file in the same commit.
 
-Each journal entry should state:
+Each development entry should state:
 
 - what was added or changed;
 - which invariant or design decision motivated it;
