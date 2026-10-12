@@ -15,8 +15,10 @@
 
 #include "pybind11.hpp"
 
-void bdd_submodule(pybind11::module& module);
+void bdd_variable_submodule(pybind11::module& module);
+void robdd_submodule(pybind11::module& module);
 
 PYBIND11_MODULE(pyariadne, module) {
-    bdd_submodule(module);
+    bdd_variable_submodule(module);
+    robdd_submodule(module);
 }

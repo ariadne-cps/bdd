@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 ##############################################################################
-#            tutorial_bdd.py
+#            tutorial_robdd.py
 #
 #  Copyright  2026  Luca Geretti
 ##############################################################################
@@ -13,17 +13,17 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-from pyariadne import BddManager, BinaryWord
+from pyariadne import RobddManager, BinaryWord
 
 
 def section(title):
     print(f"\n=== {title} ===")
 
 
-def tutorial_bdd():
+def tutorial_robdd():
     section("Manager, constants and variables")
 
-    manager = BddManager()
+    manager = RobddManager()
 
     zero = manager.constant(False)
     one = manager.constant(True)
@@ -93,8 +93,8 @@ def tutorial_bdd():
     if reduced != y:
         raise RuntimeError("ROBDD reduction failed.")
 
-    print("\nAriadne BDD tutorial completed successfully.")
+    print("\nAriadne ROBDD tutorial completed successfully.")
 
 
 if __name__ == "__main__":
-    tutorial_bdd()
+    tutorial_robdd()

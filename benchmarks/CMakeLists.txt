@@ -1,5 +1,5 @@
 set(BENCHMARKS
-    benchmark_nqueens
+    benchmark_robdd_nqueens
 )
 
 foreach(BENCHMARK ${BENCHMARKS})

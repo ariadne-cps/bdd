@@ -19,7 +19,7 @@
 
 #include "logging/logging.hpp"
 #include "utility/stopwatch.hpp"
-#include "bdd/bdd.hpp"
+#include "bdd/robdd.hpp"
 
 using namespace Ariadne;
 
@@ -35,18 +35,18 @@ SizeType index(SizeType n, SizeType row, SizeType column) {
     return row*n+column;
 }
 
-Bdd forbid_pair(
-        BddManager& manager,
-        Bdd const& first,
-        Bdd const& second)
+Robdd forbid_pair(
+        RobddManager& manager,
+        Robdd const& first,
+        Robdd const& second)
 {
     return manager.disjunction(
         manager.negation(first),
         manager.negation(second));
 }
 
-Bdd build_nqueens(BddManager& manager, SizeType n) {
-    std::vector<Bdd> square;
+Robdd build_nqueens(RobddManager& manager, SizeType n) {
+    std::vector<Robdd> square;
     square.reserve(n*n);
 
     for(SizeType row=0u; row!=n; ++row) {
@@ -55,11 +55,11 @@ Bdd build_nqueens(BddManager& manager, SizeType n) {
         }
     }
 
-    Bdd solution=manager.constant(true);
+    Robdd solution=manager.constant(true);
 
     // Exactly one queen in each row.
     for(SizeType row=0u; row!=n; ++row) {
-        Bdd at_least_one=manager.constant(false);
+        Robdd at_least_one=manager.constant(false);
 
         for(SizeType column=0u; column!=n; ++column) {
             at_least_one=manager.disjunction(
@@ -116,10 +116,10 @@ BenchmarkResult run_nqueens(SizeType n) {
     LOGGING_PRINTLN_AT(1,
         "N-Queens benchmark start: n="<<n)
 
-    BddManager manager;
+    RobddManager manager;
     Stopwatch<Microseconds> stopwatch;
 
-    const Bdd solution=build_nqueens(manager,n);
+    const Robdd solution=build_nqueens(manager,n);
 
     stopwatch.click();
 
@@ -145,7 +145,7 @@ BenchmarkResult run_nqueens(SizeType n) {
 Void print_results(std::vector<BenchmarkResult> const& results) {
     std::ostringstream table;
     table
-        <<"BDD N-Queens benchmark\n"
+        <<"ROBDD N-Queens benchmark\n"
         <<"n\ttime_ms\tallocated_nodes\n";
 
     for(auto const& result : results) {

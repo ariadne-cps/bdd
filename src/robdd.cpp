@@ -1,5 +1,5 @@
 /***************************************************************************
- *            bdd.cpp
+ *            robdd.cpp
  *
  *  Copyright  2026  Luca Geretti
  ****************************************************************************/
@@ -17,54 +17,54 @@
 #include <limits>
 
 #include "macro/general.hpp"
-#include "bdd/bdd.hpp"
+#include "bdd/robdd.hpp"
 
 namespace Ariadne {
 
-Bdd BddManager::constant(Bool value) {
-    return Bdd(this,value ? TRUE_NODE : FALSE_NODE);
+Robdd RobddManager::constant(Bool value) {
+    return Robdd(this,value ? TRUE_NODE : FALSE_NODE);
 }
 
-Bdd BddManager::variable(SizeType index) {
+Robdd RobddManager::variable(SizeType index) {
     return variable(BddVariable(index));
 }
 
-Bdd BddManager::variable(BddVariable variable) {
-    return Bdd(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
+Robdd RobddManager::variable(BddVariable variable) {
+    return Robdd(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
 }
 
-Bdd BddManager::negation(Bdd const& value) {
+Robdd RobddManager::negation(Robdd const& value) {
     NodeId root = _validate(value);
-    return Bdd(this,_ite(root,FALSE_NODE,TRUE_NODE));
+    return Robdd(this,_ite(root,FALSE_NODE,TRUE_NODE));
 }
 
-Bdd BddManager::conjunction(Bdd const& lhs, Bdd const& rhs) {
+Robdd RobddManager::conjunction(Robdd const& lhs, Robdd const& rhs) {
     NodeId l = _validate(lhs);
     NodeId r = _validate(rhs);
-    return Bdd(this,_ite(l,r,FALSE_NODE));
+    return Robdd(this,_ite(l,r,FALSE_NODE));
 }
 
-Bdd BddManager::disjunction(Bdd const& lhs, Bdd const& rhs) {
+Robdd RobddManager::disjunction(Robdd const& lhs, Robdd const& rhs) {
     NodeId l = _validate(lhs);
     NodeId r = _validate(rhs);
-    return Bdd(this,_ite(l,TRUE_NODE,r));
+    return Robdd(this,_ite(l,TRUE_NODE,r));
 }
 
-Bdd BddManager::exclusive_or(Bdd const& lhs, Bdd const& rhs) {
+Robdd RobddManager::exclusive_or(Robdd const& lhs, Robdd const& rhs) {
     NodeId l = _validate(lhs);
     NodeId r = _validate(rhs);
     NodeId not_r = _ite(r,FALSE_NODE,TRUE_NODE);
-    return Bdd(this,_ite(l,not_r,r));
+    return Robdd(this,_ite(l,not_r,r));
 }
 
-Bdd BddManager::ite(Bdd const& condition, Bdd const& then_branch, Bdd const& else_branch) {
+Robdd RobddManager::ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch) {
     NodeId c = _validate(condition);
     NodeId t = _validate(then_branch);
     NodeId e = _validate(else_branch);
-    return Bdd(this,_ite(c,t,e));
+    return Robdd(this,_ite(c,t,e));
 }
 
-Bool BddManager::evaluate(Bdd const& value, BinaryWord const& assignment) const {
+Bool RobddManager::evaluate(Robdd const& value, BinaryWord const& assignment) const {
     NodeId current = _validate(value);
     while (current != FALSE_NODE and current != TRUE_NODE) {
         Node node = _node(current);
@@ -75,32 +75,32 @@ Bool BddManager::evaluate(Bdd const& value, BinaryWord const& assignment) const 
     return current == TRUE_NODE;
 }
 
-SizeType BddManager::node_count() const {
+SizeType RobddManager::node_count() const {
     std::lock_guard<std::mutex> lock(_mutex);
     return _nodes.size();
 }
 
-BddManager::NodeId BddManager::_validate(Bdd const& value) const {
+RobddManager::NodeId RobddManager::_validate(Robdd const& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
-        "BDD operands must belong to the same manager");
+        "ROBDD operands must belong to the same manager");
     return value._root;
 }
 
-BddManager::Node BddManager::_node(NodeId id) const {
+RobddManager::Node RobddManager::_node(NodeId id) const {
     std::lock_guard<std::mutex> lock(_mutex);
     SizeType index = id - 2u;
     return _nodes[index];
 }
 
-SizeType BddManager::_top_variable(NodeId id) const {
+SizeType RobddManager::_top_variable(NodeId id) const {
     if (id == FALSE_NODE or id == TRUE_NODE) {
         return std::numeric_limits<SizeType>::max();
     }
     return _node(id).variable.index();
 }
 
-std::pair<BddManager::NodeId,BddManager::NodeId>
-BddManager::_cofactor(NodeId id, SizeType variable) const {
+std::pair<RobddManager::NodeId,RobddManager::NodeId>
+RobddManager::_cofactor(NodeId id, SizeType variable) const {
     if (id == FALSE_NODE or id == TRUE_NODE) {
         return {id,id};
     }
@@ -111,8 +111,8 @@ BddManager::_cofactor(NodeId id, SizeType variable) const {
     return {id,id};
 }
 
-BddManager::NodeId
-BddManager::_make_node(BddVariable variable, NodeId low, NodeId high) {
+RobddManager::NodeId
+RobddManager::_make_node(BddVariable variable, NodeId low, NodeId high) {
     if (low == high) {
         return low;
     }
@@ -131,8 +131,8 @@ BddManager::_make_node(BddVariable variable, NodeId low, NodeId high) {
     return id;
 }
 
-BddManager::NodeId
-BddManager::_ite(NodeId condition, NodeId then_branch, NodeId else_branch) {
+RobddManager::NodeId
+RobddManager::_ite(NodeId condition, NodeId then_branch, NodeId else_branch) {
     if (condition == TRUE_NODE) {
         return then_branch;
     }

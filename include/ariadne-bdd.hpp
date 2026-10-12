@@ -16,6 +16,7 @@
 #ifndef ARIADNE_BDD_HPP
 #define ARIADNE_BDD_HPP
 
-#include "bdd/bdd.hpp"
+#include "bdd/variable.hpp"
+#include "bdd/robdd.hpp"
 
 #endif // ARIADNE_BDD_HPP

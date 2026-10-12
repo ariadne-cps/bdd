@@ -1,5 +1,5 @@
 /***************************************************************************
- *            tutorial_bdd.cpp
+ *            tutorial_robdd.cpp
  *
  *  Copyright  2026  Luca Geretti
  ****************************************************************************/
@@ -33,19 +33,19 @@ int main() {
 
     section("Manager, constants and variables");
 
-    BddManager manager;
+    RobddManager manager;
 
-    Bdd zero=manager.constant(false);
-    Bdd one=manager.constant(true);
-    Bdd x=manager.variable(0u);
-    Bdd y=manager.variable(1u);
-    Bdd z=manager.variable(2u);
+    Robdd zero=manager.constant(false);
+    Robdd one=manager.constant(true);
+    Robdd x=manager.variable(0u);
+    Robdd y=manager.variable(1u);
+    Robdd z=manager.variable(2u);
 
     std::cout << "false is terminal: " << zero.is_terminal() << "\n";
     std::cout << "true is terminal:  " << one.is_terminal() << "\n";
     std::cout << "initial non-terminal nodes: " << manager.node_count() << "\n";
 
-    Bdd x_again=manager.variable(0u);
+    Robdd x_again=manager.variable(0u);
     std::cout << "x is canonical: " << (x==x_again) << "\n";
 
     if(x!=x_again) {
@@ -55,9 +55,9 @@ int main() {
 
     section("Boolean operations and canonicity");
 
-    Bdd xy=manager.conjunction(x,y);
-    Bdd yx=manager.conjunction(y,x);
-    Bdd x_or_not_x=manager.disjunction(x,manager.negation(x));
+    Robdd xy=manager.conjunction(x,y);
+    Robdd yx=manager.conjunction(y,x);
+    Robdd x_or_not_x=manager.disjunction(x,manager.negation(x));
 
     std::cout << "x AND y == y AND x: " << (xy==yx) << "\n";
     std::cout << "x OR NOT x is true: " << x_or_not_x.is_true() << "\n";
@@ -69,11 +69,11 @@ int main() {
 
     section("Multiplexer");
 
-    Bdd formula=manager.disjunction(
+    Robdd formula=manager.disjunction(
         manager.conjunction(x,y),
         manager.conjunction(manager.negation(x),z));
 
-    Bdd mux=manager.ite(x,y,z);
+    Robdd mux=manager.ite(x,y,z);
 
     std::cout << "expanded formula == ITE(x,y,z): " << (formula==mux) << "\n";
     std::cout << "non-terminal nodes after construction: "
@@ -106,7 +106,7 @@ int main() {
 
     section("Reduction");
 
-    Bdd reduced=manager.ite(x,y,y);
+    Robdd reduced=manager.ite(x,y,y);
     std::cout << "ITE(x,y,y) == y: " << (reduced==y) << "\n";
 
     if(reduced!=y) {
@@ -114,6 +114,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "\nAriadne BDD tutorial completed successfully.\n";
+    std::cout << "\nAriadne ROBDD tutorial completed successfully.\n";
     return 0;
 }

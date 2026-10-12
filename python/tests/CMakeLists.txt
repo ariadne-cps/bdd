@@ -18,20 +18,20 @@ endif()
 
 if(PYTHON_TESTS)
     add_custom_target(
-        test_python_bdd
-        COMMAND "${Python3_EXECUTABLE}" -m pytest "${CMAKE_CURRENT_SOURCE_DIR}/test_bdd.py"
+        test_python_robdd
+        COMMAND "${Python3_EXECUTABLE}" -m pytest "${CMAKE_CURRENT_SOURCE_DIR}/test_robdd.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_test(
-        NAME test_python_bdd
-        COMMAND "${Python3_EXECUTABLE}" -m pytest "${CMAKE_CURRENT_SOURCE_DIR}/test_bdd.py"
+        NAME test_python_robdd
+        COMMAND "${Python3_EXECUTABLE}" -m pytest "${CMAKE_CURRENT_SOURCE_DIR}/test_robdd.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
-    set_property(TEST test_python_bdd PROPERTY
+    set_property(TEST test_python_robdd PROPERTY
         ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:pyariadne>"
     )
-    set_property(TEST test_python_bdd PROPERTY LABELS "python")
+    set_property(TEST test_python_robdd PROPERTY LABELS "python")
 
-    add_dependencies(test_python_bdd pyariadne)
+    add_dependencies(test_python_robdd pyariadne)
     add_dependencies(tests pyariadne)
 endif()

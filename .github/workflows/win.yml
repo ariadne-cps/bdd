@@ -67,25 +67,25 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       run: cmake --install . --prefix "${{runner.workspace}}/install"
 
-    - name: Prepare C++ BDD Tutorial
+    - name: Prepare C++ ROBDD Tutorial
       shell: pwsh
-      run: cmake -E copy_directory "$env:GITHUB_WORKSPACE/tutorials/tutorial_bdd" "${{runner.workspace}}/tutorial_bdd"
+      run: cmake -E copy_directory "$env:GITHUB_WORKSPACE/tutorials/tutorial_robdd" "${{runner.workspace}}/tutorial_robdd"
 
-    - name: Check C++ BDD Tutorial
+    - name: Check C++ ROBDD Tutorial
       shell: pwsh
-      working-directory: ${{runner.workspace}}/tutorial_bdd
+      working-directory: ${{runner.workspace}}/tutorial_robdd
       run: |
         cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{runner.workspace}}/install" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         cmake --build build --parallel
         $env:PATH = "${{runner.workspace}}\install\bin;$env:PATH"
-        & ".\build\tutorial_bdd.exe"
+        & ".\build\tutorial_robdd.exe"
 
-    - name: Check Python BDD Tutorial
+    - name: Check Python ROBDD Tutorial
       shell: pwsh
       working-directory: ${{ github.workspace }}/python/tutorials
       run: |
         $env:PYTHONPATH = "${{ runner.workspace }}\build\python"
-        python tutorial_bdd.py
+        python tutorial_robdd.py
 
     - name: Verify Final Installation
       working-directory: ${{runner.workspace}}/build

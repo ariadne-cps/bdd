@@ -1,5 +1,5 @@
 /***************************************************************************
- *            test_bdd.cpp
+ *            test_robdd.cpp
  *
  *  Copyright  2026  Luca Geretti
  ****************************************************************************/
@@ -19,14 +19,14 @@
 
 #include "macro/testing.hpp"
 #include "threading/thread_manager.hpp"
-#include "bdd/bdd.hpp"
+#include "bdd/robdd.hpp"
 
 using namespace Ariadne;
 
-class TestBdd {
+class TestRobdd {
   public:
     void test_constants_and_variables() {
-        BddManager manager;
+        RobddManager manager;
         auto f = manager.constant(false);
         auto t = manager.constant(true);
         auto x = manager.variable(0u);
@@ -50,7 +50,7 @@ class TestBdd {
     }
 
     void test_boolean_identities() {
-        BddManager manager;
+        RobddManager manager;
         auto f = manager.constant(false);
         auto t = manager.constant(true);
         auto x = manager.variable(0u);
@@ -66,7 +66,7 @@ class TestBdd {
     }
 
     void test_evaluation() {
-        BddManager manager;
+        RobddManager manager;
         auto x = manager.variable(0u);
         auto y = manager.variable(1u);
         auto formula = manager.exclusive_or(x,y);
@@ -79,8 +79,8 @@ class TestBdd {
     }
 
     void test_manager_separation() {
-        BddManager first;
-        BddManager second;
+        RobddManager first;
+        RobddManager second;
         auto x = first.variable(0u);
         auto y = second.variable(0u);
 
@@ -96,12 +96,12 @@ class TestBdd {
         SizeType previous = thread_manager.concurrency();
         thread_manager.set_concurrency(std::min<SizeType>(maximum,4u));
 
-        BddManager manager;
+        RobddManager manager;
         auto x = manager.variable(0u);
         auto y = manager.variable(1u);
         auto not_y = manager.negation(y);
 
-        std::vector<std::future<Bdd>> futures;
+        std::vector<std::future<Robdd>> futures;
         for (SizeType i = 0u; i != 32u; ++i) {
             futures.push_back(thread_manager.enqueue([&manager,x,y,not_y] {
                 auto lhs = manager.conjunction(x,y);
@@ -127,6 +127,6 @@ class TestBdd {
 };
 
 int main() {
-    TestBdd().test();
+    TestRobdd().test();
     return ARIADNE_TEST_FAILURES;
 }

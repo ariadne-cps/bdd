@@ -3,7 +3,8 @@ include_directories(${Python3_INCLUDE_DIRS})
 get_target_property(PYTHON_COMMON_SOURCE_DIR pyariadne-python-common SOURCE_DIR)
 
 add_library(pyariadne-bdd-submodule-obj OBJECT
-    bdd_submodule.cpp
+    variable_submodule.cpp
+    robdd_submodule.cpp
 )
 target_include_directories(pyariadne-bdd-submodule-obj PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"

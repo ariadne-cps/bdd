@@ -1,4 +1,4 @@
-This is a tutorial of Ariadne BDD, written as a simple self-contained example (SSCE).
+This is a tutorial of Ariadne ROBDD, written as a simple self-contained example (SSCE).
 It is intentionally built as a standalone project and assumes that the ariadne-bdd library has already been installed.
 
 To compile and run the tutorial:
@@ -7,7 +7,7 @@ To compile and run the tutorial:
 2. cd build
 3. cmake ..
 4. cmake --build .
-5. ./tutorial_bdd
+5. ./tutorial_robdd
 
 If Ariadne BDD was installed to a non-standard prefix, pass it when configuring:
 
@@ -17,4 +17,4 @@ On Windows with Ninja:
 
     cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=C:/path/to/install
     cmake --build build
-    .\build\tutorial_bdd.exe
+    .\build\tutorial_robdd.exe

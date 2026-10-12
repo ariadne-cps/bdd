@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 
 ##############################################################################
-#            test_bdd.py
+#            test_robdd.py
 #
 #  Copyright  2026  Luca Geretti
 ##############################################################################
 
-from pyariadne import BddManager, BinaryWord
+from pyariadne import RobddManager, BinaryWord
 
 
-def test_bdd_smoke():
-    manager = BddManager()
+def test_robdd_smoke():
+    manager = RobddManager()
 
     x = manager.variable(0)
     y = manager.variable(1)

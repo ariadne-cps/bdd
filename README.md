@@ -6,7 +6,7 @@
 [![Coverage](https://github.com/ariadne-cps/bdd/actions/workflows/coverage.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/coverage.yml)
 [![codecov](https://codecov.io/gh/ariadne-cps/bdd/branch/main/graph/badge.svg)](https://codecov.io/gh/ariadne-cps/bdd)
 
-Ariadne BDD is the standalone C++20 binary decision diagram layer for Ariadne. The current implementation provides a minimal reduced ordered BDD manager with canonical nodes, ITE-based Boolean operations, evaluation and a thread-safe baseline implementation.
+Ariadne BDD is the standalone C++20 binary decision diagram layer for Ariadne. The repository is a container for decision-diagram implementations; the current implementation is an ROBDD with canonical nodes, ITE-based Boolean operations, evaluation and a thread-safe baseline implementation.
 
 The project is intentionally independent of Ariadne Kernel, Foundation, Numeric, Interval and Algebra. It depends directly on Ariadne Configuration and Ariadne Threading; Utility, Macro and Logging arrive through the Threading dependency chain.
 
@@ -51,23 +51,23 @@ A C++20 compiler and CMake are required. Python bindings are built by default wh
 
 ## Python bindings
 
-The standalone build produces the `pyariadne` module when Python 3.11 or newer and the Python development headers are available. The current binding exposes `BddManager`, `Bdd`, `BddVariable` and `BinaryWord`.
+The standalone build produces the `pyariadne` module when Python 3.11 or newer and the Python development headers are available. The current binding exposes `RobddManager`, `Robdd`, `BddVariable` and `BinaryWord`.
 
 Python tests use pytest. Configure with `-DPYTHON_ENFORCE_TESTS=ON` when Python and pytest must be present.
 
 ## Tutorials
 
-A standalone C++ tutorial is available in `tutorials/tutorial_bdd`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
+A standalone C++ tutorial is available in `tutorials/tutorial_robdd`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
 
 After installing Ariadne BDD to a prefix:
 
 ```bash
-cmake -S tutorials/tutorial_bdd -B tutorial-build -DCMAKE_PREFIX_PATH=/path/to/install
+cmake -S tutorials/tutorial_robdd -B tutorial-build -DCMAKE_PREFIX_PATH=/path/to/install
 cmake --build tutorial-build
-./tutorial-build/tutorial_bdd
+./tutorial-build/tutorial_robdd
 ```
 
-A matching Python tutorial is available in `python/tutorials/tutorial_bdd.py`. It reproduces the same sequence of examples using the Python bindings.
+A matching Python tutorial is available in `python/tutorials/tutorial_robdd.py`. It reproduces the same sequence of examples using the Python bindings.
 
 The Unix and Windows CI jobs build and execute both tutorials.
 

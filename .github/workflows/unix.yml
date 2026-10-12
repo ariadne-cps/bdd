@@ -96,23 +96,23 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       run: cmake --install . --prefix ${{runner.workspace}}/install
 
-    - name: Prepare C++ BDD Tutorial
-      run: cmake -E copy_directory $GITHUB_WORKSPACE/tutorials/tutorial_bdd ${{runner.workspace}}/tutorial_bdd
+    - name: Prepare C++ ROBDD Tutorial
+      run: cmake -E copy_directory $GITHUB_WORKSPACE/tutorials/tutorial_robdd ${{runner.workspace}}/tutorial_robdd
 
-    - name: Check C++ BDD Tutorial
-      working-directory: ${{runner.workspace}}/tutorial_bdd
+    - name: Check C++ ROBDD Tutorial
+      working-directory: ${{runner.workspace}}/tutorial_robdd
       run: |
         cmake -S . -B build -DCMAKE_PREFIX_PATH=${{runner.workspace}}/install -DCMAKE_CXX_COMPILER=${{matrix.config.cxx-cmd}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja
         cmake --build build --parallel $($NPROC)
         export LD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${LD_LIBRARY_PATH:-}
         export DYLD_LIBRARY_PATH=${{runner.workspace}}/install/lib:${DYLD_LIBRARY_PATH:-}
-        ./build/tutorial_bdd
+        ./build/tutorial_robdd
 
-    - name: Check Python BDD Tutorial
+    - name: Check Python ROBDD Tutorial
       working-directory: ${{ github.workspace }}/python/tutorials
       env:
         PYTHONPATH: ${{ runner.workspace }}/build/python
-      run: python tutorial_bdd.py
+      run: python tutorial_robdd.py
 
     - name: Verify Final Installation
       working-directory: ${{runner.workspace}}/build

@@ -4,7 +4,7 @@ This is the living design manual for `ariadne-cps/bdd`. It also records the chro
 
 ## 1. Purpose
 
-Ariadne BDD provides a standalone C++20 implementation of reduced ordered binary decision diagrams (ROBDDs) for the Ariadne ecosystem.
+Ariadne BDD is a standalone C++20 container library for binary decision-diagram representations in the Ariadne ecosystem. The first concrete representation is ROBDD; additional families such as ZDD may be added later only when justified by real workloads.
 
 Two downstream applications motivate the library:
 
@@ -46,9 +46,9 @@ This keeps the dependency direction suitable for future reuse by higher layers a
 
 A lower variable index appears closer to the root of an ordered diagram.
 
-### BDD handles
+### ROBDD handles
 
-`Bdd` is a lightweight non-owning handle consisting conceptually of:
+`Robdd` is a lightweight non-owning handle consisting conceptually of:
 
 ```text
 (manager, root node id)
@@ -235,7 +235,7 @@ BddVariable identity != ordering level
 
 For a fixed-order manager, identity and level may use the same numeric representation as a fast path. For a reorderable manager, the implementation may maintain variable-to-level and level-to-variable mappings, or store the current level directly in nodes while retaining a separate logical-identity mapping. The latter should be evaluated because a reorder already requires rebuilding/recanonicalizing affected structure and it may keep normal recursive comparisons direct.
 
-The public `Bdd` type should remain common to both modes. The choice of ordering policy should be made when the manager/context is created and should not require distinct `FixedBdd` and `DynamicBdd` user-facing types.
+The public `Robdd` type remains common to fixed-order and reorderable ROBDD modes. The choice of ordering policy should be made when the manager/context is created and should not require distinct `FixedRobdd` and `DynamicRobdd` user-facing types.
 
 Dynamic reordering also has a concurrency consequence. Normal BDD operations should remain concurrent, whereas a reorder is expected to require an exclusive manager phase: active operations must reach a safe point, the ordering and canonical structures are rebuilt, computed caches are invalidated as needed, and concurrent operations resume afterwards.
 
@@ -301,11 +301,11 @@ N-tree sets that participate in union, intersection, difference or projection mu
 The intended model is therefore:
 
 ```text
-shared BddManager / BddContext
+shared RobddManager / BddContext
        |
-       +-- NTree A -> immutable Bdd root
-       +-- NTree B -> immutable Bdd root
-       +-- NTree C -> immutable Bdd root
+       +-- NTree A -> immutable Robdd root
+       +-- NTree B -> immutable Robdd root
+       +-- NTree C -> immutable Robdd root
 ```
 
 The immutable BDD roots are suitable for concurrent reads and snapshot-style updates. Higher-level mutable N-tree objects may replace their root after an operation, but the BDD nodes themselves remain immutable.
@@ -377,14 +377,14 @@ The current grid-set and SAT use cases are Boolean, so multi-terminal semantics 
 
 The public class name should make the chosen decision-diagram semantics explicit.
 
-The preferred direction is to rename the current representation handle from `Bdd` to `Robdd`, and correspondingly `BddManager` to `RobddManager`. This has two advantages:
+The preferred direction is to rename the current representation handle from `Bdd` to `Robdd`, and correspondingly `RobddManager` to `RobddManager`. This has two advantages:
 
 - users immediately know that the representation is reduced and ordered rather than an unspecified BDD variant;
 - a future `Zdd`, `MtBdd` or other sibling representation can coexist without forcing a later semantic rename of a widely used generic `Bdd` type.
 
 The logical variable abstraction is less representation-specific. `BddVariable` may remain shared for now, or be generalized later if multiple decision-diagram families actually appear; it does not need to become `RobddVariable` merely for naming symmetry.
 
-This rename should be done early, before downstream Kernel/grid-set integration makes the public API expensive to change.
+The repository/package name remains BDD because it is the container for multiple decision-diagram families. Generic concepts such as `BddVariable`, the `bdd` interface target, the installed `ariadne-bdd` library, the top-level `ariadne-bdd.hpp` header and the aggregate `BDD_SRC` object target remain representation-neutral.
 
 ### Architectural decision
 
@@ -447,6 +447,32 @@ Workloads should include:
 A BDD backend is not expected to dominate CDCL on generic SAT instances. Its value must be demonstrated on structured formulas, repeated/incremental constraints, model-set operations and SMT theory-nogood refinement.
 
 ## 12. Development history
+
+### 2026-10-12 - ROBDD-specific naming and generic BDD split
+
+The initial implementation was renamed so that representation-specific APIs and files explicitly state that they are ROBDDs, while the repository remains the generic BDD container.
+
+Current structure:
+
+- generic BDD layer: `include/bdd/variable.hpp` with `BddVariable`;
+- ROBDD layer: `include/bdd/robdd.hpp` with `Robdd` and `RobddManager`;
+- ROBDD implementation: `src/robdd.cpp`;
+- aggregate source target remains `BDD_SRC` and currently contains the ROBDD implementation;
+- package/repository targets remain `bdd` and `ariadne-bdd`;
+- top-level `ariadne-bdd.hpp` remains the aggregate public header.
+
+Representation-specific consumers were renamed consistently:
+
+- C++ test: `test_robdd.cpp`;
+- Python test: `test_robdd.py`;
+- C++ tutorial: `tutorials/tutorial_robdd`;
+- Python tutorial: `tutorial_robdd.py`;
+- benchmark: `benchmark_robdd_nqueens.cpp`;
+- Python binding code separates generic BDD-variable bindings from ROBDD bindings.
+
+This leaves room for future files such as `zdd.hpp` / `zdd.cpp` to join the same BDD package and `BDD_SRC` target without overloading the meaning of a generic `Bdd` class.
+
+
 
 ### 2026-10-11 - Repository bootstrap
 
