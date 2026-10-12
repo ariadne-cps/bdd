@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.15)
 project(Bdd VERSION 1.0)
 
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
-option(THREAD_SANITIZER "Enable ThreadSanitizer" OFF)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/ss/configuration/cmake/ProjectOptions.cmake")
@@ -17,9 +16,6 @@ include("${PROJECT_SOURCE_DIR}/ss/configuration/cmake/ProjectOptions.cmake")
 require_initialized_submodules()
 setup_project()
 
-if(COVERAGE AND THREAD_SANITIZER)
-    message(FATAL_ERROR "COVERAGE and THREAD_SANITIZER cannot be enabled together.")
-endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
     require_same_dependency_commit(Configuration
@@ -42,13 +38,6 @@ target_include_directories(bdd INTERFACE
 )
 target_link_libraries(bdd INTERFACE threading)
 
-if(THREAD_SANITIZER)
-    if(WIN32 OR NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-        message(FATAL_ERROR "ThreadSanitizer requires GCC or Clang on Unix-like systems.")
-    endif()
-    target_compile_options(bdd INTERFACE -fsanitize=thread -fno-omit-frame-pointer)
-    target_link_options(bdd INTERFACE -fsanitize=thread)
-endif()
 
 add_subdirectory(src)
 target_link_libraries(BDD_SRC PRIVATE bdd)
