@@ -154,7 +154,50 @@ Planned: bounded hash-based cache. Cache entries may eventually be lossy because
 
 Not implemented yet.
 
-The public API deliberately does not expose the representation of `NodeId`, so a complement bit can be introduced later without changing user-facing BDD handles. Before implementation we must choose and document a normalization rule that preserves unique-table canonicity.
+Complemented edges are a planned optional representation policy rather than a mandatory property of every manager.
+
+The main motivation is SAT/general-purpose symbolic work: representing `not f` by toggling a complement bit on a semantic node reference can make negation nearly free and allow a function and its complement to share the same physical nodes.
+
+The N-tree/grid-paving case is more nuanced. Traversal-heavy operations such as iteration, enabled-cell counting, subset/disjoint checks and geometric descent may execute very little work per visited node. Requiring every traversal step to propagate edge polarity can therefore introduce measurable overhead even if it is implemented with masking/XOR rather than a branch.
+
+Conversely, grid-set operations involving complement-like structure, especially difference/remove, may benefit from complemented edges through lower node counts and cheaper negation. This tradeoff must be measured rather than assumed.
+
+The intended design is therefore orthogonal policy selection:
+
+```text
+ordering policy:
+    fixed
+    reorderable
+
+edge policy:
+    regular
+    complemented
+```
+
+The initial expected configurations are:
+
+```text
+N-tree/grid-paving:
+    fixed ordering
+    regular edges initially
+
+SAT/general-purpose:
+    reorderable ordering optionally
+    complemented edges
+```
+
+N-tree benchmarks should later compare regular and complemented edges on representative operations before deciding whether complemented edges are worth enabling there.
+
+The implementation should distinguish physical node identity from semantic node reference:
+
+```text
+NodeId  = physical canonical node identity
+NodeRef = NodeId plus representation metadata such as a complement bit
+```
+
+This separation should be established before complemented edges are implemented. The public API already avoids exposing raw node identifiers, which leaves room for this change without altering user-facing handle semantics.
+
+As with ordering policy, the fixed/regular fast path should not repeatedly branch on whether complemented edges are enabled. Internal policy specialization or another zero/near-zero-overhead mechanism is preferred.
 
 ### Garbage collection
 
@@ -329,6 +372,19 @@ Neither FBDD nor SDD is currently justified as the primary Ariadne representatio
 Multi-terminal BDDs or algebraic decision diagrams become relevant if grid leaves later carry values richer than enabled/disabled state, such as labels, occupancy values, costs or probabilities.
 
 The current grid-set and SAT use cases are Boolean, so multi-terminal semantics should not complicate the initial ROBDD core. The design of reusable low-level infrastructure such as node arenas, concurrent tables and scheduling should nevertheless avoid needless assumptions that would make a future multi-terminal sibling implementation impossible.
+
+### Public naming
+
+The public class name should make the chosen decision-diagram semantics explicit.
+
+The preferred direction is to rename the current representation handle from `Bdd` to `Robdd`, and correspondingly `BddManager` to `RobddManager`. This has two advantages:
+
+- users immediately know that the representation is reduced and ordered rather than an unspecified BDD variant;
+- a future `Zdd`, `MtBdd` or other sibling representation can coexist without forcing a later semantic rename of a widely used generic `Bdd` type.
+
+The logical variable abstraction is less representation-specific. `BddVariable` may remain shared for now, or be generalized later if multiple decision-diagram families actually appear; it does not need to become `RobddVariable` merely for naming symmetry.
+
+This rename should be done early, before downstream Kernel/grid-set integration makes the public API expensive to change.
 
 ### Architectural decision
 
@@ -694,6 +750,26 @@ Decision:
 - do not generalize the ROBDD core prematurely into a multi-family decision-diagram framework.
 
 This keeps optimization effort focused on the representation that serves both current applications while preserving room for evidence-driven extensions later.
+
+### 2026-10-12 - Complemented-edge policy and explicit ROBDD naming
+
+The complemented-edge design was refined after considering traversal-heavy grid-set workloads.
+
+Decision:
+
+- complemented edges are not mandatory for every manager;
+- edge representation is an internal policy orthogonal to variable-ordering policy;
+- SAT/general-purpose workloads are expected to benefit most from complemented edges;
+- N-tree/grid-paving starts with regular edges and fixed natural order, then benchmarks complemented edges on real traversal, difference/remove and projection workloads;
+- introduce an internal distinction between physical `NodeId` and semantic `NodeRef` before complemented edges;
+- avoid per-node runtime feature checks in the regular-edge fast path.
+
+The public naming direction was also clarified:
+
+- prefer `Robdd` over the generic `Bdd` handle name;
+- prefer `RobddManager` over `BddManager`;
+- do not force `BddVariable` to become `RobddVariable`, because logical variable identity is not inherently tied to one decision-diagram family;
+- perform the rename early, before substantial downstream integration.
 
 ### Next milestone
 
