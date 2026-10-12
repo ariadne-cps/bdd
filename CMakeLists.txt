@@ -27,9 +27,7 @@ endif()
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
 
-if(NOT TARGET threading)
-    add_subdirectory(ss)
-endif()
+add_subdirectory(ss)
 
 add_library(bdd INTERFACE)
 target_include_directories(bdd INTERFACE

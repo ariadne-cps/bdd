@@ -7,10 +7,7 @@ find_package(Python3 3.11 COMPONENTS Interpreter Development.Module)
 option(PYTHON_ENFORCE_TESTS "Enforce Python tests" OFF)
 
 if(Python3_FOUND)
-    message(STATUS "Python executable: ${Python3_EXECUTABLE}")
-    message(STATUS "Python version:    ${Python3_VERSION}")
-    message(STATUS "Python includes:   ${Python3_INCLUDE_DIRS}")
-    message(STATUS "Python SOABI:      ${Python3_SOABI}")
+    report_python_configuration_once()
 
     if(NOT TARGET pybind11::module)
         get_target_property(PYTHON_COMMON_SOURCE_DIR pyariadne-python-common SOURCE_DIR)
