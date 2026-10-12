@@ -285,7 +285,73 @@ Compatibility tests should be derived from the historical `test_bdd_set.cpp` cas
 - enabled-cell iteration;
 - projection to selected dimensions.
 
-## 9. Testing strategy
+## 9. Choice of decision-diagram family
+
+ROBDD remains the primary representation for Ariadne BDD because it is the strongest common fit for the two current target workloads: symbolic SAT/model-set manipulation and N-tree/grid-paving storage.
+
+### N-tree/grid-paving storage
+
+For N-tree storage, ROBDD reduction matches the tree semantics directly:
+
+- if both branches of a subdivision are identical, the corresponding variable level disappears;
+- a terminal `true` represents a uniformly enabled subtree;
+- a terminal `false` represents a uniformly empty subtree;
+- skipped variables therefore mean that both choices lead to the same represented subtree.
+
+This is exactly the compression behavior exploited by the historical BuDDy-backed `BDDTreeSet`.
+
+N-tree storage should therefore use an ROBDD manager with fixed natural variable ordering and dynamic reordering disabled.
+
+### SAT and symbolic model sets
+
+For SAT, ROBDD is not expected to replace CDCL as the universally best representation when the only question is satisfiable/unsatisfiable. Its value is instead that the root represents the complete satisfying assignment set and supports canonical Boolean operations, restriction, quantification, projection, model extraction/counting and incremental intersection.
+
+The preferred SAT/general-purpose configuration is therefore an ROBDD with optional dynamic variable reordering. Complemented edges should be evaluated as an important optimization because they preserve ROBDD semantics while allowing a function and its complement to share structure.
+
+### ZDD
+
+Zero-suppressed decision diagrams are potentially attractive for sparse families of sets or satisfying assignments where relatively few variables are present/true in each member.
+
+They are not a drop-in replacement for the N-tree representation: an omitted variable in an ROBDD means that both variable choices lead to the same function, while an omitted variable in a ZDD carries zero-suppression semantics. The ROBDD interpretation is the one required by grid-tree subdivision/recombination.
+
+ZDD should therefore remain a possible future second representation, primarily for sparse AllSAT/combinatorial workloads, and should only be implemented if benchmark evidence demonstrates a substantial advantage.
+
+### FBDD and SDD
+
+Free BDDs can be smaller than ordered BDDs for some functions because different paths may use different variable orders. That flexibility weakens the simple global-order canonicity and makes apply, equivalence, concurrent unique-table management and N-tree path semantics less suitable for the current Ariadne goals.
+
+Sentential Decision Diagrams can provide more flexible canonical decompositions and may outperform OBDDs on some knowledge-compilation workloads, but they require substantially more complex decomposition/vtree machinery and do not map naturally to N-tree subdivision levels.
+
+Neither FBDD nor SDD is currently justified as the primary Ariadne representation.
+
+### MTBDD / ADD
+
+Multi-terminal BDDs or algebraic decision diagrams become relevant if grid leaves later carry values richer than enabled/disabled state, such as labels, occupancy values, costs or probabilities.
+
+The current grid-set and SAT use cases are Boolean, so multi-terminal semantics should not complicate the initial ROBDD core. The design of reusable low-level infrastructure such as node arenas, concurrent tables and scheduling should nevertheless avoid needless assumptions that would make a future multi-terminal sibling implementation impossible.
+
+### Architectural decision
+
+The implementation should remain semantically specialized around ROBDD rather than introducing a generic abstraction for every decision-diagram family.
+
+Reusable infrastructure may be shared in the future, but ROBDD reduction, unique-table semantics and algorithms should remain explicit and optimizable.
+
+The current preferred feature progression is:
+
+```text
+ROBDD core
+    |
+    +-- structural traversal
+    +-- restriction / quantification / and_exists
+    +-- complemented edges
+    +-- fixed-order and reorderable manager policies
+    +-- concurrent unique/computed tables
+    +-- structured parallel recursion
+```
+
+Only after measurements on real SAT, AllSAT and grid-set workloads should an additional representation such as ZDD be considered.
+
+## 10. Testing strategy
 
 Every structural optimization must preserve the existing semantic tests.
 
@@ -303,7 +369,7 @@ Required test families:
 
 Tests must not rely on numeric node identifiers being identical across separate managers or across future concurrent allocation schedules.
 
-## 10. Benchmark strategy
+## 11. Benchmark strategy
 
 The benchmark suite will eventually record:
 
@@ -324,7 +390,7 @@ Workloads should include:
 
 A BDD backend is not expected to dominate CDCL on generic SAT instances. Its value must be demonstrated on structured formulas, repeated/incremental constraints, model-set operations and SMT theory-nogood refinement.
 
-## 11. Development history
+## 12. Development history
 
 ### 2026-10-11 - Repository bootstrap
 
@@ -613,19 +679,37 @@ Decision:
 
 The preferred architecture is therefore policy separation inside one library, not separate `FixedBdd` and `DynamicBdd` user-facing types and not a per-operation runtime boolean branch.
 
+### 2026-10-12 - ROBDD versus alternative decision-diagram families
+
+The representation choice was reviewed against both target workloads rather than assuming that every BDD family is interchangeable.
+
+Decision:
+
+- ROBDD remains the primary Ariadne representation;
+- N-tree/grid-paving storage uses fixed natural ordering because ROBDD skipped-variable semantics match implicit identical subtrees;
+- SAT/general-purpose workloads may use dynamic reordering and should later evaluate complemented edges;
+- ZDD is the most plausible future second representation for sparse model families or combinatorial enumeration, but only if benchmarks justify it;
+- FBDD and SDD are not currently justified because their additional structural flexibility complicates canonicity, apply/concurrency machinery and N-tree mapping;
+- MTBDD/ADD is deferred until a real non-Boolean leaf-value use case appears;
+- do not generalize the ROBDD core prematurely into a multi-family decision-diagram framework.
+
+This keeps optimization effort focused on the representation that serves both current applications while preserving room for evidence-driven extensions later.
+
 ### Next milestone
 
 1. strengthen BDD tests with exhaustive/random truth tables;
 2. add structural inspection APIs needed by N-tree traversal: top variable, low/high and support;
 3. add order-preserving variable shifting/renaming and existential quantification, including an optimized `and_exists` path;
-4. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
-5. add instrumentation for unique-table and computed-table behavior;
-6. replace the coarse unique table with a sharded hash implementation;
-7. parallelize ITE and the new structural operations above tunable grain thresholds;
-8. add N-tree compatibility/benchmark workloads derived from the historical `BDDTreeSet` and `GridTreeSet`;
-9. then begin the BDD-backed SAT layer on top of the now broader core API.
+4. evaluate and implement complemented edges with a documented normalization rule;
+5. make the Threading fork/join primitives concrete and implement them in `ariadne-cps/threading`;
+6. add instrumentation for unique-table and computed-table behavior;
+7. replace the coarse unique table with a sharded hash implementation;
+8. parallelize ITE and the new structural operations above tunable grain thresholds;
+9. add N-tree compatibility/benchmark workloads derived from the historical `BDDTreeSet` and `GridTreeSet`;
+10. then begin the BDD-backed SAT layer on top of the now broader core API;
+11. consider ZDD only after ROBDD benchmarks show a concrete sparse-model workload that warrants a second representation.
 
-## 12. Maintenance rule
+## 13. Maintenance rule
 
 Every substantial change should update this file in the same commit.
 
