@@ -16,8 +16,8 @@
 #include <sstream>
 
 #include "pybind11.hpp"
-#include "utility/binary_word.hpp"
 #include "bdd/variable.hpp"
+#include "utility/binary_word.hpp"
 
 using namespace Ariadne;
 
