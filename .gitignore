@@ -1,1 +1,3 @@
+python/tests/__pycache__
 build*
+.DS_Store
