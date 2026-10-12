@@ -36,7 +36,17 @@ class TestBdd {
         ARIADNE_TEST_ASSERT(t.is_true())
         ARIADNE_TEST_ASSERT(not x.is_terminal())
         ARIADNE_TEST_ASSERT(x == x_again)
+        ARIADNE_TEST_ASSERT(f != t)
         ARIADNE_TEST_EQUALS(manager.node_count(),1u)
+
+        BddVariable first(0u);
+        BddVariable first_again(0u);
+        BddVariable second(1u);
+        ARIADNE_TEST_ASSERT(first == first_again)
+        ARIADNE_TEST_ASSERT(first != second)
+        ARIADNE_TEST_ASSERT(first < second)
+
+        ARIADNE_TEST_ASSERT(manager.ite(x,t,f) == x)
     }
 
     void test_boolean_identities() {
@@ -65,6 +75,7 @@ class TestBdd {
         ARIADNE_TEST_EQUALS(manager.evaluate(formula,make_binary_word("01")),true)
         ARIADNE_TEST_EQUALS(manager.evaluate(formula,make_binary_word("10")),true)
         ARIADNE_TEST_EQUALS(manager.evaluate(formula,make_binary_word("11")),false)
+        ARIADNE_TEST_FAIL(manager.evaluate(y,make_binary_word("0")))
     }
 
     void test_manager_separation() {
@@ -73,6 +84,7 @@ class TestBdd {
         auto x = first.variable(0u);
         auto y = second.variable(0u);
 
+        ARIADNE_TEST_ASSERT(x != y)
         ARIADNE_TEST_FAIL(first.conjunction(x,y))
     }
 

@@ -87,10 +87,8 @@ BddManager::NodeId BddManager::_validate(Bdd const& value) const {
 }
 
 BddManager::Node BddManager::_node(NodeId id) const {
-    ARIADNE_PRECONDITION(id > TRUE_NODE);
     std::lock_guard<std::mutex> lock(_mutex);
     SizeType index = id - 2u;
-    ARIADNE_ASSERT(index < _nodes.size());
     return _nodes[index];
 }
 
