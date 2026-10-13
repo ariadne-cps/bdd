@@ -114,9 +114,9 @@ jobs:
         PYTHONPATH: ${{ runner.workspace }}/build/python
       run: python tutorial_robdd.py
 
-    - name: Verify Final Installation
+    - name: Verify Uninstallation
       working-directory: ${{runner.workspace}}/build
-      run: cmake --install . --prefix ${{runner.workspace}}/verify-install
+      run: cmake --build . --target uninstall
 
   thread-sanitizer:
     name: Ubuntu 24.04 Clang 16 [ThreadSanitizer]
