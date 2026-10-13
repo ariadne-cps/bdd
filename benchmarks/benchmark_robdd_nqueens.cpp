@@ -17,7 +17,11 @@
 #include <stdexcept>
 #include <vector>
 
+#include "logging/command_line.hpp"
 #include "logging/logging.hpp"
+#include "threading/command_line.hpp"
+#include "threading/thread_manager.hpp"
+#include "utility/command_line_interface.hpp"
 #include "utility/stopwatch.hpp"
 #include "bdd/robdd.hpp"
 
@@ -160,8 +164,21 @@ Void print_results(std::vector<BenchmarkResult> const& results) {
 
 } // namespace
 
-Int main() {
+Int main(Int argc, const char* argv[]) {
     Logger::instance().configuration().set_verbosity(1u);
+
+    // Instantiate the threading layer first: it attaches its registry to the
+    // logger, allowing the logging scheduler option to be configured safely.
+    ThreadManager::instance();
+
+    CommandLineInterface command_line;
+    command_line
+        .add(logging_command_line())
+        .add(threading_command_line());
+
+    if (not command_line.acquire(argc,argv)) {
+        return 0;
+    }
 
     std::vector<BenchmarkResult> results;
     results.reserve(3u);
