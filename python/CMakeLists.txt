@@ -21,7 +21,7 @@ if(Python3_FOUND)
 
     if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
         pybind11_add_module(pyariadne
-            $<TARGET_OBJECTS:pyariadne-bdd-module-obj>
+            $<TARGET_OBJECTS:pyariadne-bdd-entry-obj>
             $<TARGET_OBJECTS:BDD_SRC>
             $<TARGET_OBJECTS:THREADING_SRC>
             $<TARGET_OBJECTS:LOGGING_SRC>

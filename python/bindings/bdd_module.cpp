@@ -18,7 +18,7 @@
 void bdd_variable_submodule(pybind11::module& module);
 void robdd_submodule(pybind11::module& module);
 
-PYBIND11_MODULE(pyariadne, module) {
+void bdd_module(pybind11::module& module) {
     bdd_variable_submodule(module);
     robdd_submodule(module);
 }

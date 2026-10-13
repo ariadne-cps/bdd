@@ -28,16 +28,7 @@ target_link_libraries(pyariadne-bdd INTERFACE
     pyariadne-python-common
 )
 
-if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
-    add_library(pyariadne-bdd-module-obj OBJECT
-        bdd_module.cpp
-    )
-    target_include_directories(pyariadne-bdd-module-obj PRIVATE
-        "${PYTHON_COMMON_SOURCE_DIR}/include"
-    )
-    target_link_libraries(pyariadne-bdd-module-obj PRIVATE
-        pyariadne-python-common
-        pybind11::module
-    )
-    set_target_properties(pyariadne-bdd-module-obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
+ariadne_add_python_module(
+    NAME bdd
+    MODULE_SOURCE bdd_module.cpp
+)
