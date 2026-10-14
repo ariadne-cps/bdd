@@ -11,6 +11,7 @@ if(Python3_FOUND)
 
     if(NOT TARGET pybind11::module)
         get_target_property(PYTHON_COMMON_SOURCE_DIR pyariadne-python-common SOURCE_DIR)
+        ensure_submodule_initialized(pybind11 REPOSITORY "${PYTHON_COMMON_SOURCE_DIR}")
         add_subdirectory(
             "${PYTHON_COMMON_SOURCE_DIR}/pybind11"
             "${CMAKE_CURRENT_BINARY_DIR}/pybind11"
