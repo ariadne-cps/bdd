@@ -19,6 +19,8 @@
 
 #include "macro/testing.hpp"
 #include "threading/thread_manager.hpp"
+#include "threading/threading_command_line_interface.hpp"
+#include "logging/logging.hpp"
 #include "bdd/robdd.hpp"
 
 using namespace Ariadne;
@@ -117,7 +119,18 @@ class TestRobdd {
         thread_manager.set_concurrency(previous);
     }
 
+    void test_threading_command_line() {
+        ThreadingCommandLineInterface cli;
+        ARIADNE_TEST_ASSERT(cli.acquire({""}))
+        ARIADNE_TEST_ASSERT(cli.acquire({"","--verbosity","2","--theme","none","--scheduler","immediate","--concurrency","0"}))
+        ARIADNE_TEST_EQUALS(Logger::instance().configuration().verbosity(),2u)
+        ARIADNE_TEST_EQUALS(ThreadManager::instance().concurrency(),0u)
+        ARIADNE_TEST_ASSERT(not cli.acquire({"","--concurrency","invalid"}))
+        Logger::instance().use_nonblocking_scheduler();
+    }
+
     void test() {
+        ARIADNE_TEST_CALL(test_threading_command_line())
         ARIADNE_TEST_CALL(test_constants_and_variables())
         ARIADNE_TEST_CALL(test_boolean_identities())
         ARIADNE_TEST_CALL(test_evaluation())
