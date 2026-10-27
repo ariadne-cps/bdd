@@ -22,7 +22,7 @@ The project is intentionally independent of Ariadne Kernel, Foundation, Numeric,
 - A concurrent canonical-construction regression test.
 - Python bindings for the current core BDD API.
 - C++ and Python tutorials exercised on Unix and Windows CI.
-- Unix, Windows, coverage and ThreadSanitizer CI configurations.
+- Release builds and installed-library tutorials on Unix and Windows; Debug C++/Python tests, AddressSanitizer/UBSan, ThreadSanitizer and coverage CI.
 
 The current unique table and computed table are deliberately simple ordered maps protected by one mutex. They are a correctness baseline, not the intended final concurrent implementation.
 
@@ -70,7 +70,7 @@ cmake --build tutorial-build
 
 A matching Python tutorial is available in `python/tutorials/tutorial_robdd.py`. It reproduces the same sequence of examples using the Python bindings.
 
-The Unix and Windows CI jobs build and execute both tutorials.
+The Unix and Windows Release CI jobs build and execute both tutorials against the installed library; the installed Python extension is checked to come from the installation prefix. Debug CI runs C++ and Python regression tests.
 
 ## ThreadSanitizer
 

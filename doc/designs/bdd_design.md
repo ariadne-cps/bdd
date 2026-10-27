@@ -811,6 +811,28 @@ The public naming direction was also clarified:
 10. then begin the BDD-backed SAT layer on top of the now broader core API;
 11. consider ZDD only after ROBDD benchmarks show a concrete sparse-model workload that warrants a second representation.
 
+### 2026-10-27 - Align CI with the current Ariadne SMT matrix
+
+The BDD CI was using Release-only build/test jobs and a ThreadSanitizer job
+embedded in the Unix workflow, while SMT and Symbolic had moved to separate
+Release-build and Debug-test jobs and independent sanitizer workflows.
+
+Changes:
+- Unix matrix now uses macOS 26 AppleClang 21, Ubuntu Clang 16 and GCC 13,
+  each in Release and Debug; GCC Debug enables checked libstdc++ iterators.
+- Windows 2025 likewise builds Release and executes Debug C++/Python tests.
+- Release jobs install and validate both C++ and Python tutorials against the
+  installed artifacts, including an explicit installed-module origin check.
+- ThreadSanitizer and AddressSanitizer/UBSan run in a dedicated workflow.
+- Coverage uses Debug and disables Python bindings to focus on the C++ layer.
+- The standalone Python module installs to a prefix-relative site-packages
+  location (Unix/macOS and Windows), matching the installation checks.
+
+The ROBDD algorithm, public headers, tests, and dependency pins are unchanged.
+The new CI configurations are not considered validated until GitHub Actions
+has completed on this commit; compatibility and sanitizer results remain to
+be confirmed by those runs.
+
 ## 13. Maintenance rule
 
 Every substantial change should update this file in the same commit.

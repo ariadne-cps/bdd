@@ -6,23 +6,23 @@ on:
       - main
   pull_request:
 
-env:
-  SCCACHE_GHA_ENABLED: "true"
-
 jobs:
   build:
-    name: ${{ matrix.config.name }}
-    runs-on: ${{ matrix.config.os }}
+    name: Windows 2025 MSVC [${{ matrix.build_type == 'Release' && 'Release Build' || 'Debug Tests' }}]
+    runs-on: windows-2025
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {
-            name: "Windows 2025 [Release]",
-            os: windows-2025,
-            build-type: "Release"
-          }
+        build_type: [Release, Debug]
+
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+
     steps:
+    - name: Enable long paths in Git
+      shell: pwsh
+      run: git config --system core.longpaths true
+
     - uses: actions/checkout@v3
 
     - name: Set up MSVC environment
@@ -40,51 +40,65 @@ jobs:
         python-version: "3.13"
 
     - name: Install Python Test Dependencies
+      if: matrix.build_type == 'Debug'
       run: python -m pip install pytest
 
     - name: Create Build Environment
-      run: cmake -E make_directory ${{runner.workspace}}/build
+      run: cmake -E make_directory ${{ runner.workspace }}/build
 
     - name: Configure CMake
-      working-directory: ${{runner.workspace}}/build
-      run: cmake ${{runner.workspace}}/bdd -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=ON
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake $env:GITHUB_WORKSPACE -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Ob0 /Od /RTC1" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
     - name: Build
-      working-directory: ${{runner.workspace}}/build
+      working-directory: ${{ runner.workspace }}/build
       run: cmake --build . --parallel --target everything
 
     - name: Test C++
-      working-directory: ${{runner.workspace}}/build
+      if: matrix.build_type == 'Debug'
+      working-directory: ${{ runner.workspace }}/build
       run: ctest -LE python -V --timeout 30
 
+
     - name: Test Python
-      working-directory: ${{runner.workspace}}/build
-      run: ctest -L python -V --timeout 30
+      if: matrix.build_type == 'Debug'
+      working-directory: ${{ runner.workspace }}/build
+      run: ctest -L python -V --timeout 60
 
     - name: Install Ariadne BDD
-      working-directory: ${{runner.workspace}}/build
-      run: cmake --install . --prefix "${{runner.workspace}}/install"
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --install . --prefix "${{ runner.workspace }}/install"
 
-    - name: Prepare C++ ROBDD Tutorial
-      shell: pwsh
-      run: cmake -E copy_directory "$env:GITHUB_WORKSPACE/tutorials/tutorial_robdd" "${{runner.workspace}}/tutorial_robdd"
-
-    - name: Check C++ ROBDD Tutorial
-      shell: pwsh
-      working-directory: ${{runner.workspace}}/tutorial_robdd
-      run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{runner.workspace}}/install" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-        cmake --build build --parallel
-        $env:PATH = "${{runner.workspace}}\install\bin;$env:PATH"
-        & ".\build\tutorial_robdd.exe"
-
-    - name: Check Python ROBDD Tutorial
+    - name: Check Python BDD Tutorial
+      if: matrix.build_type == 'Release'
       shell: pwsh
       working-directory: ${{ github.workspace }}/python/tutorials
       run: |
-        $env:PYTHONPATH = "${{ runner.workspace }}\build\python"
+        $env:PYTHONPATH = "${{ runner.workspace }}\install\Lib\site-packages"
+        $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
+        python -c "import pyariadne; print(pyariadne.__file__)"
         python tutorial_robdd.py
 
+
+    - name: Prepare C++ BDD Tutorial
+      if: matrix.build_type == 'Release'
+      shell: pwsh
+      run: cmake -E copy_directory "$env:GITHUB_WORKSPACE/tutorials/tutorial_robdd" "${{ runner.workspace }}/tutorial_robdd"
+
+    - name: Check C++ BDD Tutorial
+      if: matrix.build_type == 'Release'
+      shell: pwsh
+      working-directory: ${{ runner.workspace }}/tutorial_robdd
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 
+        cmake --build build --parallel
+        $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
+        & ".\build\tutorial_robdd.exe"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+
     - name: Verify Uninstallation
-      working-directory: ${{runner.workspace}}/build
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ runner.workspace }}/build
       run: cmake --build . --target uninstall

@@ -3,7 +3,7 @@ name: Coverage
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
 
 env:
@@ -17,32 +17,22 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {
-            name: "macOS 26 AppleClang 21 [Coverage]",
-            os: macos-26,
-            cxx: "/usr/bin/clang++"
-          }
-          - {
-            name: "Ubuntu 24.04 GCC 13 [Coverage]",
-            os: ubuntu-24.04,
-            cxx: "g++-13"
-          }
+          - { name: "macOS 26 AppleClang 21 [Coverage]", os: macos-26, cxx: "/usr/bin/clang++" }
+          - { name: "Ubuntu 24.04 GCC 13 [Coverage]", os: ubuntu-24.04, cxx: "g++-13" }
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up sccache
+    - name: Enable compiler cache
       uses: mozilla-actions/sccache-action@v0.0.11
-      with:
-        version: "v0.18.0"
 
     - name: Get macOS Concurrency
       if: runner.os == 'macOS'
-      run: echo NPROC="sysctl -n hw.ncpu" >> $GITHUB_ENV
+      run: echo "NPROC=$(sysctl -n hw.ncpu)" >> "$GITHUB_ENV"
 
     - name: Get Linux Concurrency
       if: runner.os == 'Linux'
-      run: echo NPROC="nproc" >> $GITHUB_ENV
+      run: echo "NPROC=$(nproc)" >> "$GITHUB_ENV"
 
     - name: Set Up macOS Dependencies
       if: runner.os == 'macOS'
@@ -55,15 +45,15 @@ jobs:
         sudo apt-get install -y cmake ninja-build pkg-config lcov g++-13
 
     - name: Create Build Environment
-      run: cmake -E make_directory ${{runner.workspace}}/build
+      run: cmake -E make_directory ${{ runner.workspace }}/build
 
     - name: Configure CMake
-      working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=${{matrix.config.cxx}} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G "Ninja" -DCOVERAGE=ON -DWARNINGS_AS_ERRORS=ON
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -G Ninja -DCOVERAGE=ON -DWARNINGS_AS_ERRORS=ON -DBUILD_PYTHON_BINDINGS=OFF -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
 
     - name: Build, Test and Generate Code Coverage
-      working-directory: ${{runner.workspace}}/build
-      run: cmake --build . --parallel $($NPROC) --target coverage
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --build . --parallel $NPROC --target coverage
 
     - name: Check Codecov Token
       if: runner.os == 'macOS'
@@ -80,7 +70,7 @@ jobs:
       if: runner.os == 'macOS'
       uses: codecov/codecov-action@v7.1.1
       with:
-        files: ${{runner.workspace}}/build/coverage.info
+        files: ${{ runner.workspace }}/build/coverage.info
         disable_search: true
         fail_ci_if_error: true
         verbose: true
