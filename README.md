@@ -30,9 +30,9 @@ The current unique table and computed table are deliberately simple ordered maps
 
 The repository contains these direct Git submodules:
 
-- `ss/configuration` -> [ariadne-cps/configuration](https://github.com/ariadne-cps/configuration)
-- `ss/threading` -> [ariadne-cps/threading](https://github.com/ariadne-cps/threading)
-- `ss/python-common` -> [ariadne-cps/python-common](https://github.com/ariadne-cps/python-common), used only to build the Python bindings
+- `ss/cfg` -> [ariadne-cps/configuration](https://github.com/ariadne-cps/configuration)
+- `ss/thr` -> [ariadne-cps/threading](https://github.com/ariadne-cps/threading)
+- `ss/pyt` -> [ariadne-cps/python-common](https://github.com/ariadne-cps/python-common), used only to build the Python bindings
 
 Clone recursively so that all transitive dependencies and pybind11 are initialized.
 

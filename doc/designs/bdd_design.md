@@ -19,8 +19,8 @@ The long-term goal is a genuinely concurrent BDD implementation. Concurrency is 
 
 Direct dependencies:
 
-- `ss/configuration`
-- `ss/threading`
+- `ss/cfg`
+- `ss/thr`
 
 Threading supplies its own transitive Utility, Macro and Logging dependencies.
 
@@ -678,7 +678,7 @@ Added Python support following the standalone Ariadne binding pattern.
 Build structure:
 
 - `BUILD_PYTHON_BINDINGS` defaults to ON;
-- `ss/python-common` supplies the shared pybind11 support layer;
+- `ss/pyt` supplies the shared pybind11 support layer;
 - the standalone module is named `pyariadne`, consistent with the other Ariadne repositories;
 - the module incorporates BDD and required transitive object code so that it is self-contained at link time;
 - `PYTHON_ENFORCE_TESTS=ON` requires Python >= 3.11 and pytest.
