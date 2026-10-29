@@ -60,13 +60,13 @@ jobs:
     - name: Test C++
       if: matrix.build_type == 'Debug'
       working-directory: ${{ runner.workspace }}/build
-      run: ctest -LE python -V --timeout 30
+      run: ctest -LE python --output-on-failure
 
 
     - name: Test Python
       if: matrix.build_type == 'Debug'
       working-directory: ${{ runner.workspace }}/build
-      run: ctest -L python -V --timeout 60
+      run: ctest -L python --output-on-failure
 
     - name: Install Ariadne BDD
       if: matrix.build_type == 'Release'
