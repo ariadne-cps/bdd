@@ -58,17 +58,17 @@ Python tests use pytest. Configure with `-DPYTHON_ENFORCE_TESTS=ON` when Python 
 
 ## Tutorials
 
-A standalone C++ tutorial is available in `tutorials/tutorial_robdd`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
+A standalone C++ tutorial is available directly in `tutorial/`. It is designed to be built against an installed Ariadne BDD rather than directly against the repository source tree.
 
 After installing Ariadne BDD to a prefix:
 
 ```bash
-cmake -S tutorials/tutorial_robdd -B tutorial-build -DCMAKE_PREFIX_PATH=/path/to/install
+cmake -S tutorial -B tutorial-build -DCMAKE_PREFIX_PATH=/path/to/install
 cmake --build tutorial-build
-./tutorial-build/tutorial_robdd
+./tutorial-build/tutorial_bdd
 ```
 
-A matching Python tutorial is available in `python/tutorials/tutorial_robdd.py`. It reproduces the same sequence of examples using the Python bindings.
+A matching Python tutorial is available in `tutorial/tutorial_bdd.py`, alongside the C++ example. It reproduces the same sequence of examples using the installed Python bindings and can be run with `python tutorial/tutorial_bdd.py`.
 
 The Unix and Windows Release CI jobs build and execute both tutorials against the installed library; the installed Python extension is checked to come from the installation prefix. Debug CI runs C++ and Python regression tests.
 

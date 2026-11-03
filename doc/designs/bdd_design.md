@@ -465,8 +465,8 @@ Representation-specific consumers were renamed consistently:
 
 - C++ test: `test_robdd.cpp`;
 - Python test: `test_robdd.py`;
-- C++ tutorial: `tutorials/tutorial_robdd`;
-- Python tutorial: `tutorial_robdd.py`;
+- C++ tutorial: `tutorial/tutorial_bdd.cpp`;
+- Python tutorial: `tutorial/tutorial_bdd.py`;
 - benchmark: `benchmark_robdd_nqueens.cpp`;
 - Python binding code separates generic BDD-variable bindings from ROBDD bindings.
 
@@ -868,3 +868,22 @@ does not change ROBDD algorithms, public APIs, Python bindings or benchmarks.
 
 Validation: static migration checks completed before commit; CI compilation,
 regression execution and sanitizer results remain to be confirmed.
+
+### 2026-11-03 - Consolidate BDD tutorials in the flat tutorial directory
+
+Relocated the standalone C++ tutorial from `tutorials/tutorial_robdd` and
+the matching Python tutorial from `python/tutorials/tutorial_robdd.py`
+directly into `tutorial/`, with no nested project directory. The folder
+contains `CMakeLists.txt`, `FindAriadneBdd.cmake`, `README`,
+`tutorial_bdd.cpp` and `tutorial_bdd.py`. Both tutorial programs now use
+the name `tutorial_bdd`; their example scenarios are unchanged.
+
+Updated the standalone CMake executable, root and tutorial documentation,
+and Ubuntu, macOS and Windows Release workflows. CI continues to run the
+installed Python module, and copies the standalone C++ project out of the
+source tree to build it against an installed Ariadne BDD library. The prior
+`tutorials/` and `python/tutorials/` directories have no remaining files.
+
+Validation: checked source paths and CMake/CI references statically before
+commit. Successful Release tutorial builds and runs on all three platforms
+remain to be confirmed by GitHub Actions.

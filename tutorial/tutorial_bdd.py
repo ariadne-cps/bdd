@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 ##############################################################################
-#            tutorial_robdd.py
+#            tutorial_bdd.py
 #
 #  Copyright  2026  Luca Geretti
 ##############################################################################
@@ -20,7 +20,7 @@ def section(title):
     print(f"\n=== {title} ===")
 
 
-def tutorial_robdd():
+def tutorial_bdd():
     section("Manager, constants and variables")
 
     manager = RobddManager()
@@ -97,4 +97,4 @@ def tutorial_robdd():
 
 
 if __name__ == "__main__":
-    tutorial_robdd()
+    tutorial_bdd()

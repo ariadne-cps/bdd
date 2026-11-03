@@ -7,7 +7,7 @@ To compile and run the tutorial:
 2. cd build
 3. cmake ..
 4. cmake --build .
-5. ./tutorial_robdd
+5. ./tutorial_bdd
 
 If Ariadne BDD was installed to a non-standard prefix, pass it when configuring:
 
@@ -17,4 +17,9 @@ On Windows with Ninja:
 
     cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=C:/path/to/install
     cmake --build build
-    .\build\tutorial_robdd.exe
+    .\build\tutorial_bdd.exe
+ 
+The matching Python example is in this same directory. After installing the
+Ariadne Python bindings (and ensuring pyariadne is importable), run:
+
+    python tutorial_bdd.py
