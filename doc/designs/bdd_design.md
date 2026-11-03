@@ -846,3 +846,25 @@ Each development entry should state:
 - what the next concrete step is.
 
 Failed approaches should remain documented rather than being silently removed; they are part of the design history.
+
+### 2026-11-03 - Migrate ROBDD tests to Ariadne Testing
+
+The six existing regression methods now run as separate `ContextFixture`
+cases registered directly through `ARIADNE_TESTING_ADD_TEST`. No artificial
+parameter variants are introduced. The original order is preserved:
+threading CLI setup, constants and variables, Boolean identities, evaluation,
+manager separation, and concurrent canonical construction.
+
+All 20 assertion checks, seven equality checks and two expected-exception
+checks are retained with the evidence-aware Ariadne Testing macros. The
+32-task concurrent construction scenario, thread-concurrency restoration,
+and threading CLI coverage remain unchanged. CTest uses `--concise`.
+
+Replace the obsolete `macro/general.hpp` include in `src/robdd.cpp`
+with `utility/macros.hpp`. Link the test target to `ariadne-testing`
+and align configuration, threading and testing submodule gitlinks with
+the shared GCC-safe compile-time fixture registration API. This migration
+does not change ROBDD algorithms, public APIs, Python bindings or benchmarks.
+
+Validation: static migration checks completed before commit; CI compilation,
+regression execution and sanitizer results remain to be confirmed.

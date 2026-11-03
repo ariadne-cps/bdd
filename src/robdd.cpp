@@ -16,7 +16,7 @@
 #include <algorithm>
 #include <limits>
 
-#include "macro/general.hpp"
+#include "utility/macros.hpp"
 #include "bdd/robdd.hpp"
 
 namespace Ariadne {

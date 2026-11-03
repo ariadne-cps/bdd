@@ -21,6 +21,16 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
         CHAINS
             "configuration"
             "threading|configuration"
+            "testing|configuration"
+            "threading|testing|configuration"
+            "threading|logging|testing|configuration"
+    )
+    require_same_dependency_commit(Testing
+        CHAINS
+            "testing"
+            "threading|testing"
+            "threading|logging|testing"
+            "threading|logging|utility|testing"
     )
 endif()
 

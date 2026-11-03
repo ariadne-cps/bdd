@@ -7,3 +7,6 @@
 [submodule "pyt"]
 	path = ss/pyt
 	url = https://github.com/ariadne-cps/python-common
+[submodule "tst"]
+	path = ss/tst
+	url = https://github.com/ariadne-cps/testing
