@@ -20,6 +20,8 @@ jobs:
 
     env:
       SCCACHE_GHA_ENABLED: "true"
+  SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+  SCCACHE_CONF: ${{ github.workspace }}/ss/bui/cmake/sccache.toml
 
     steps:
     - name: Enable long paths in Git
@@ -35,6 +37,7 @@ jobs:
 
     - name: Set up sccache
       uses: mozilla-actions/sccache-action@v0.0.11
+      continue-on-error: true
       with:
         version: "v0.18.0"
 
@@ -49,9 +52,14 @@ jobs:
     - name: Create Build Environment
       run: cmake -E make_directory ${{ runner.workspace }}/build
 
+    - name: Initialize optional sccache before compilation
+      run: |
+        git submodule update --init -- ss/bui
+        cmake -P ss/bui/cmake/InitializeSccache.cmake
+
     - name: Configure CMake
       working-directory: ${{ runner.workspace }}/build
-      run: cmake $env:GITHUB_WORKSPACE -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Ob0 /Od /RTC1" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
+      run: cmake $env:GITHUB_WORKSPACE -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_FLAGS_DEBUG="/Z7 /Ob0 /Od /RTC1" -DCMAKE_C_COMPILER_LAUNCHER="$env:SCCACHE_LAUNCHER" -DCMAKE_CXX_COMPILER_LAUNCHER="$env:SCCACHE_LAUNCHER"  -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
     - name: Build
       working-directory: ${{ runner.workspace }}/build
@@ -94,7 +102,7 @@ jobs:
       shell: pwsh
       working-directory: ${{ runner.workspace }}/tutorial_bdd
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install" -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install" -DCMAKE_C_COMPILER_LAUNCHER="$env:SCCACHE_LAUNCHER" -DCMAKE_CXX_COMPILER_LAUNCHER="$env:SCCACHE_LAUNCHER" 
         cmake --build build --parallel
         $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
         & ".\build\tutorial_bdd.exe"

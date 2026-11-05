@@ -8,8 +8,9 @@
 [![codecov](https://codecov.io/gh/ariadne-cps/bdd/branch/main/graph/badge.svg)](https://codecov.io/gh/ariadne-cps/bdd)
 
 Ariadne BDD is the standalone C++20 binary decision diagram layer for Ariadne. The repository is a container for decision-diagram implementations; the current implementation is an ROBDD with canonical nodes, ITE-based Boolean operations, evaluation and a thread-safe baseline implementation.
+Although independently maintained and usable, this repository is also part of the [Ariadne repository structure](https://github.com/ariadne-cps/ariadne/blob/main/doc/structure.md).
 
-The project is intentionally independent of Ariadne Kernel, Foundation, Numeric, Interval and Algebra. It depends directly on Ariadne Configuration and Ariadne Threading; Utility, Macro and Logging arrive through the Threading dependency chain.
+The project is intentionally independent of Ariadne Kernel, Foundation, Numeric, Interval and Algebra. It depends directly on Ariadne Build and Ariadne Threading; Utility, Macro and Logging arrive through the Threading dependency chain.
 
 ## Current features
 
@@ -30,7 +31,7 @@ The current unique table and computed table are deliberately simple ordered maps
 
 The repository contains these direct Git submodules:
 
-- `ss/cfg` -> [ariadne-cps/configuration](https://github.com/ariadne-cps/configuration)
+- `ss/cfg` -> [ariadne-cps/build](https://github.com/ariadne-cps/build)
 - `ss/thr` -> [ariadne-cps/threading](https://github.com/ariadne-cps/threading)
 - `ss/pyt` -> [ariadne-cps/python-common](https://github.com/ariadne-cps/python-common), used only to build the Python bindings
 
