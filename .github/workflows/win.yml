@@ -81,17 +81,6 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
       run: cmake --install . --prefix "${{ runner.workspace }}/install"
 
-    - name: Check Python BDD Tutorial
-      if: matrix.build_type == 'Release'
-      shell: pwsh
-      working-directory: ${{ github.workspace }}/tutorial
-      run: |
-        $env:PYTHONPATH = "${{ runner.workspace }}\install\Lib\site-packages"
-        $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
-        python -c "import pyariadne; print(pyariadne.__file__)"
-        python tutorial_bdd.py
-
-
     - name: Prepare C++ BDD Tutorial
       if: matrix.build_type == 'Release'
       shell: pwsh
@@ -107,6 +96,17 @@ jobs:
         $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
         & ".\build\tutorial_bdd.exe"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+
+    - name: Check Python BDD Tutorial
+      if: matrix.build_type == 'Release'
+      shell: pwsh
+      working-directory: ${{ github.workspace }}/tutorial
+      run: |
+        $env:PYTHONPATH = "${{ runner.workspace }}\install\Lib\site-packages"
+        $env:PATH = "${{ runner.workspace }}\install\bin;$env:PATH"
+        python -c "import pyariadne_bdd; print(pyariadne_bdd.__file__)"
+        python tutorial_bdd.py
 
 
     - name: Verify Uninstallation

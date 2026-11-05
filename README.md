@@ -82,10 +82,3 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DTHREAD_SANITIZER=ON
 cmake --build . --parallel
 ctest --output-on-failure
 ```
-
-## License
-
-Ariadne BDD is released under the GNU General Public License v3.0.
-
-The standalone BDD layer exposes the inherited logging and threading command-line
-profile through `ThreadingCommandLineInterface`, provided by the Threading dependency.

@@ -79,18 +79,6 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
       run: cmake --install . --prefix ${{ runner.workspace }}/install
 
-    - name: Check Python BDD Tutorial
-      if: matrix.build_type == 'Release'
-      working-directory: ${{ github.workspace }}/tutorial
-      env:
-        PYTHONPATH: ${{ runner.workspace }}/install/lib/python3.13/site-packages
-        LD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
-        DYLD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
-      run: |
-        python -c "import os, pathlib, pyariadne; p=pathlib.Path(pyariadne.__file__).resolve(); root=pathlib.Path(os.environ['PYTHONPATH']).resolve(); assert p.is_relative_to(root), (p, root)"
-        python tutorial_bdd.py
-
-
     - name: Prepare C++ BDD Tutorial
       if: matrix.build_type == 'Release'
       run: cmake -E copy_directory $GITHUB_WORKSPACE/tutorial ${{ runner.workspace }}/tutorial_bdd
@@ -104,6 +92,18 @@ jobs:
         export LD_LIBRARY_PATH=${{ runner.workspace }}/install/lib:${LD_LIBRARY_PATH:-}
         export DYLD_LIBRARY_PATH=${{ runner.workspace }}/install/lib:${DYLD_LIBRARY_PATH:-}
         ./build/tutorial_bdd
+
+
+    - name: Check Python BDD Tutorial
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ github.workspace }}/tutorial
+      env:
+        PYTHONPATH: ${{ runner.workspace }}/install/lib/python3.13/site-packages
+        LD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
+        DYLD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
+      run: |
+        python -c "import os, pathlib, pyariadne_bdd; p=pathlib.Path(pyariadne_bdd.__file__).resolve(); root=pathlib.Path(os.environ['PYTHONPATH']).resolve(); assert p.is_relative_to(root), (p, root)"
+        python tutorial_bdd.py
 
 
     - name: Verify Uninstallation

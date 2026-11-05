@@ -30,5 +30,6 @@ target_link_libraries(pyariadne-bdd INTERFACE
 
 ariadne_add_python_module(
     NAME bdd
+    MODULE_IMPORT_NAME pyariadne_bdd
     MODULE_SOURCE bdd_module.cpp
 )

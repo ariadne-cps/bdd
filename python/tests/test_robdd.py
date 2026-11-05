@@ -6,7 +6,7 @@
 #  Copyright  2026  Luca Geretti
 ##############################################################################
 
-from pyariadne import RobddManager, BinaryWord
+from pyariadne_bdd import RobddManager, BinaryWord
 
 
 def test_robdd_smoke():

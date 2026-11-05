@@ -16,6 +16,8 @@
 #ifndef ARIADNE_BDD_HPP
 #define ARIADNE_BDD_HPP
 
+#include "ariadne-threading.hpp"
+
 #include "bdd/variable.hpp"
 #include "bdd/robdd.hpp"
 #include "threading/threading_command_line_interface.hpp"
