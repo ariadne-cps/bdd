@@ -974,3 +974,20 @@ sanitizer runs must be confirmed by CI after the commit. The next increment
 is M2: support extraction, order-preserving variable shift and general
 simultaneous renaming, with semantic tests for skipped levels and invalid
 mappings.
+
+### 2026-11-06 - Complete M0/M1 sentinel precondition coverage
+
+The local LCOV report `coverage(6).info` for M0/M1 recorded 207/207
+covered source/header lines, with one uncovered branch (67/68 covered):
+the reserved maximum-`SizeType` variable precondition in
+`RobddManager::make_node` at `src/robdd.cpp:68`.
+
+Added a targeted expected-exception regression for passing the reserved
+sentinel to `make_node`, alongside the existing `variable` sentinel
+test. This exercises a real public API contract and does not alter the
+ROBDD implementation or relax the precondition.
+
+Validation: the provided report establishes the pre-change uncovered
+branch; the new test requires C++/CI execution before claiming full
+branch coverage for the updated commit. Next milestone remains M2
+(`support`, `shift`, `rename`).

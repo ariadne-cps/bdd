@@ -152,6 +152,8 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.make_node(BddVariable(4u),z,f));
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.make_node(BddVariable(3u),z,z));
         ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.make_node(BddVariable(std::numeric_limits<SizeType>::max()),f,t));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
             manager.variable(std::numeric_limits<SizeType>::max()));
 
         RobddManager other;
