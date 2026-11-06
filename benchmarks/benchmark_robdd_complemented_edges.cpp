@@ -14,6 +14,7 @@
  */
 
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 
 #include "logging/logging.hpp"
