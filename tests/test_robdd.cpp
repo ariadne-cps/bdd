@@ -79,6 +79,16 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
 
         ARIADNE_TESTING_EXPECT_EQUAL(manager.node_count(),nodes_before_negation);
         ARIADNE_TESTING_PROVE(manager.negation(complement) == formula);
+
+        auto not_x = manager.negation(x);
+        auto not_y = manager.negation(y);
+        SizeType nodes_before_equivalent_complement = manager.node_count();
+        auto equivalent_complement = manager.disjunction(not_x,not_y);
+
+        ARIADNE_TESTING_PROVE(equivalent_complement == complement);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.node_count(),nodes_before_equivalent_complement);
+
         ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("00")),true);
         ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("01")),true);
         ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("10")),true);
