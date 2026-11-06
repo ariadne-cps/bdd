@@ -214,6 +214,22 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
             manager.shift(manager.negation(formula),2) == manager.negation(moved_up));
         ARIADNE_TESTING_PROVE(manager.shift(moved_up,-2) == formula);
 
+        // Both branches refer to one physical child with opposite polarity.
+        // Shifting the shared DAG must reuse the memoized transformed child.
+        auto shared_child = manager.variable(7u);
+        auto shared_root = manager.ite(
+            manager.variable(0u),shared_child,manager.negation(shared_child));
+        ARIADNE_TESTING_PROVE(
+            manager.low(shared_root) == manager.negation(manager.high(shared_root)));
+        auto shifted_shared = manager.shift(shared_root,2);
+        auto expected_shared = manager.ite(
+            manager.variable(2u),manager.variable(9u),
+            manager.negation(manager.variable(9u)));
+        ARIADNE_TESTING_PROVE(shifted_shared == expected_shared);
+        ARIADNE_TESTING_PROVE(
+            manager.shift(manager.negation(shared_root),2)
+            == manager.negation(shifted_shared));
+
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.shift(formula,-2));
         ARIADNE_TESTING_EXPECT_EXCEPTION(
             manager.shift(formula,std::numeric_limits<std::ptrdiff_t>::min()));

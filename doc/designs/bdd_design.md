@@ -1036,3 +1036,24 @@ and sanitizer validation require GitHub CI on the committed change.
 The next milestone is M3: restriction, existential quantification and
 `and_exists`, with semantic equivalence tests against independent truth
 tables and careful distinction between restrictions and top-only cofactors.
+
+### 2026-11-06 - M2 coverage: shared-subgraph memoization in shift
+
+The locally supplied `coverage(7).info` records full line/function
+coverage (302/302 instrumented lines, 43/43 functions) and 105/106
+branches for the M2 revision. The only uncovered branch was the
+already-memoized path at `src/robdd.cpp:138`, inside the recursive
+`shift` rebuild.
+
+Added a semantic regression containing a shared physical child
+referenced with opposite edge polarities. The test verifies semantic
+low/high branch complements, applies a positive index shift, and checks
+the canonical result against an independently constructed ITE; it also
+verifies that shifting a complemented root produces the complement of
+the shifted original. This is a representative DAG-sharing scenario
+and exercises the real memo-hit path without modifying the algorithm.
+
+Validation: the uploaded report proves the uncovered branch on the
+preceding commit. The new test and the resulting coverage are pending
+CI confirmation on this commit. M3 (restriction, existential
+quantification and `and_exists`) remains the next feature milestone.
