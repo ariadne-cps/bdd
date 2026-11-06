@@ -13,6 +13,7 @@
  *  (at your option) any later version.
  */
 
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -99,19 +100,37 @@ Void print_results(
         BenchmarkResult const& regular,
         BenchmarkResult const& complemented)
 {
+    constexpr Int policy_width = 14;
+    constexpr Int functions_width = 12;
+    constexpr Int nodes_width = 15;
+    constexpr Int extra_width = 13;
+    constexpr Int time_width = 14;
+
     std::ostringstream table;
     table
         <<"ROBDD complemented-edge benchmark\n"
-        <<"policy\tfunctions\tnodes_before\tnodes_after\textra_nodes\tnegation_ms\n";
+        <<std::left
+        <<std::setw(policy_width)<<"policy"
+        <<std::right
+        <<std::setw(functions_width)<<"functions"
+        <<std::setw(nodes_width)<<"nodes_before"
+        <<std::setw(nodes_width)<<"nodes_after"
+        <<std::setw(extra_width)<<"extra_nodes"
+        <<std::setw(time_width)<<"negation_ms"
+        <<"\n";
 
     for (auto const& result : {regular,complemented}) {
         table
-            <<result.policy<<"\t"
-            <<result.functions<<"\t"
-            <<result.nodes_before_negation<<"\t"
-            <<result.nodes_after_negation<<"\t"
-            <<(result.nodes_after_negation-result.nodes_before_negation)<<"\t"
-            <<result.negation_ms<<"\n";
+            <<std::left
+            <<std::setw(policy_width)<<result.policy
+            <<std::right
+            <<std::setw(functions_width)<<result.functions
+            <<std::setw(nodes_width)<<result.nodes_before_negation
+            <<std::setw(nodes_width)<<result.nodes_after_negation
+            <<std::setw(extra_width)
+            <<(result.nodes_after_negation-result.nodes_before_negation)
+            <<std::setw(time_width)<<result.negation_ms
+            <<"\n";
     }
 
     LOGGING_PRINTLN(table.str())
