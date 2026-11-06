@@ -68,6 +68,23 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_PROVE(manager.disjunction(x,y) == manager.disjunction(y,x));
     }
 
+    void test_complemented_edge_sharing() {
+        RobddManager manager;
+        auto x = manager.variable(0u);
+        auto y = manager.variable(1u);
+        auto formula = manager.conjunction(x,y);
+        SizeType nodes_before_negation = manager.node_count();
+
+        auto complement = manager.negation(formula);
+
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.node_count(),nodes_before_negation);
+        ARIADNE_TESTING_PROVE(manager.negation(complement) == formula);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("00")),true);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("01")),true);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("10")),true);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(complement,make_binary_word("11")),false);
+    }
+
     void test_evaluation() {
         RobddManager manager;
         auto x = manager.variable(0u);
@@ -137,6 +154,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_threading_command_line);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_constants_and_variables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_boolean_identities);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_complemented_edge_sharing);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);

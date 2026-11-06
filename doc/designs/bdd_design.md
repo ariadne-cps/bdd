@@ -887,3 +887,48 @@ source tree to build it against an installed Ariadne BDD library. The prior
 Validation: checked source paths and CMake/CI references statically before
 commit. Successful Release tutorial builds and runs on all three platforms
 remain to be confirmed by GitHub Actions.
+
+
+### 2026-11-06 - Complemented edges with compile-time regular baseline
+
+Implemented complemented edges as the canonical public ROBDD representation.
+
+Representation and canonicity:
+
+- the public `RobddManager` is a compile-time alias of the complemented-edge specialization;
+- the regular-edge specialization remains internal and exists only for regression and A/B benchmarking;
+- there is no runtime `complemented_edges` flag or hot-path branch in the public manager;
+- complemented references use one polarity bit while physical non-terminal nodes remain stored once;
+- `false` and `true` are the two polarities of the terminal reference;
+- every physical non-terminal node is normalized so that its `low` reference is regular;
+- if node construction receives a complemented `low` reference, both children are complemented and the returned node reference carries the complement bit;
+- negation in the public backend is therefore a constant-time polarity toggle and allocates no nodes;
+- cofactor extraction and evaluation propagate the incoming reference polarity to child references.
+
+Architecture:
+
+- the ROBDD algorithm is shared by `BasicRobddManager<EdgePolicy>`;
+- `ComplementedEdgePolicy` and `RegularEdgePolicy` are selected at compile time;
+- `Robdd` / `RobddManager` expose only the complemented specialization;
+- `Detail::RegularRobddManager` is intentionally not a user-facing configuration option.
+
+Regression coverage now checks that negating a non-trivial ROBDD does not increase
+the physical node count, that double negation returns the same canonical handle,
+and that complemented-root evaluation has the expected truth table.
+
+Added `benchmark_robdd_complemented_edges`. It builds the same family of all
+non-empty conjunctions over 12 variables with each specialization, records the
+physical node count, and then times closure of that pre-built family under
+negation. The timed phase deliberately contains only negation so the comparison
+isolates the representation advantage: the complemented specialization should
+allocate zero additional physical nodes, while the regular baseline must build
+canonical complement structure. The regular path is compile-time specialized,
+so retaining the benchmark baseline imposes no runtime feature branch on the
+public complemented implementation.
+
+Validation status:
+
+- source-level invariants and benchmark symmetry were reviewed while preparing
+  the change;
+- successful compilation, unit-test execution, sanitizer runs and benchmark
+  numbers remain to be confirmed by CI after the commit.

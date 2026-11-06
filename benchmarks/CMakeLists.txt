@@ -1,5 +1,6 @@
 set(BENCHMARKS
     benchmark_robdd_nqueens
+    benchmark_robdd_complemented_edges
 )
 
 foreach(BENCHMARK ${BENCHMARKS})
