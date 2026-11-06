@@ -16,8 +16,10 @@
 #ifndef ARIADNE_BDD_ROBDD_HPP
 #define ARIADNE_BDD_ROBDD_HPP
 
+#include <cstddef>
 #include <map>
 #include <mutex>
+#include <set>
 #include <optional>
 #include <tuple>
 #include <utility>
@@ -84,6 +86,21 @@ class RobddManager {
     //! variables must follow the supplied variable in the fixed ordering.
     //! Equal children are reduced to their shared child.
     Robdd make_node(BddVariable variable, Robdd const& low, Robdd const& high);
+
+    //! \brief Distinct variables in the function, sorted by increasing index.
+    //! \details A complemented root has the same support as its regular root.
+    std::vector<BddVariable> support(Robdd const& value) const;
+
+    //! \brief Shift every supported variable by a signed offset.
+    //! \details The uniform shift preserves variable order. Negative indices,
+    //! overflow and the reserved terminal-order sentinel are rejected.
+    Robdd shift(Robdd const& value, std::ptrdiff_t offset);
+
+    //! \brief Simultaneously replace variable indices, keeping unmapped indices.
+    //! \details Reordering and variable identification (non-injective maps)
+    //! are supported: the result is rebuilt canonically using ITE. Source and
+    //! target indices must not equal the reserved terminal-order sentinel.
+    Robdd rename(Robdd const& value, std::map<SizeType,SizeType> const& indices);
 
     Robdd negation(Robdd const& value);
     Robdd conjunction(Robdd const& lhs, Robdd const& rhs);

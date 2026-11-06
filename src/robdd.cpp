@@ -14,7 +14,9 @@
  */
 
 #include <algorithm>
+#include <functional>
 #include <limits>
+#include <set>
 
 #include "utility/macros.hpp"
 #include "bdd/robdd.hpp"
@@ -72,6 +74,116 @@ Robdd RobddManager::make_node(
         variable.index() < _top_variable(high_ref),
         "ROBDD node variable must precede the variables of both children");
     return Robdd(this,_make_node(variable,low_ref,high_ref));
+}
+
+std::vector<BddVariable> RobddManager::support(Robdd const& value) const {
+    NodeRef root = _validate(value);
+    std::set<NodeRef> visited;
+    std::set<SizeType> indices;
+
+    std::function<void(NodeRef)> visit = [&](NodeRef ref) {
+        if (_is_terminal(ref)) {
+            return;
+        }
+        NodeRef regular = ref & ~NodeRef(1u);
+        if (not visited.insert(regular).second) {
+            return;
+        }
+        Node node = _node(regular);
+        indices.insert(node.variable.index());
+        visit(node.low);
+        visit(node.high);
+    };
+    visit(root);
+
+    std::vector<BddVariable> result;
+    result.reserve(indices.size());
+    for (SizeType index : indices) {
+        result.emplace_back(index);
+    }
+    return result;
+}
+
+Robdd RobddManager::shift(Robdd const& value, std::ptrdiff_t offset) {
+    NodeRef root = _validate(value);
+    if (_is_terminal(root) or offset == 0) {
+        return Robdd(this,root);
+    }
+
+    constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
+    Bool negative = offset < 0;
+    // Avoid negating PTRDIFF_MIN, which cannot be represented as positive
+    // ptrdiff_t. SizeType is the unsigned representation of variable indices.
+    SizeType magnitude = negative
+        ? static_cast<SizeType>(-(offset + 1)) + 1u
+        : static_cast<SizeType>(offset);
+
+    ARIADNE_PRECONDITION_MSG(negative or magnitude < max_index,
+        "ROBDD variable shift overflows the variable index range");
+    // Preflight every supported variable before creating any new nodes.
+    for (BddVariable variable : support(value)) {
+        SizeType index = variable.index();
+        ARIADNE_PRECONDITION_MSG(
+            negative ? index >= magnitude : index < max_index - magnitude,
+            "ROBDD variable shift leaves the valid variable index range");
+    }
+
+    std::map<NodeRef,NodeRef> memo;
+    std::function<NodeRef(NodeRef)> rebuild = [&](NodeRef ref) -> NodeRef {
+        if (_is_terminal(ref)) {
+            return ref;
+        }
+        NodeRef regular = ref & ~NodeRef(1u);
+        auto found = memo.find(regular);
+        if (found == memo.end()) {
+            Node node = _node(regular);
+            NodeRef low = rebuild(node.low);
+            NodeRef high = rebuild(node.high);
+            SizeType index = node.variable.index();
+            SizeType shifted_index = negative ? index - magnitude : index + magnitude;
+            NodeRef shifted = _make_node(BddVariable(shifted_index),low,high);
+            found = memo.emplace(regular,shifted).first;
+        }
+        return _is_complemented(ref) ? _negate(found->second) : found->second;
+    };
+    return Robdd(this,rebuild(root));
+}
+
+Robdd RobddManager::rename(
+        Robdd const& value, std::map<SizeType,SizeType> const& indices) {
+    NodeRef root = _validate(value);
+    constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
+    for (auto const& entry : indices) {
+        ARIADNE_PRECONDITION_MSG(entry.first < max_index and entry.second < max_index,
+            "ROBDD variable renaming uses the reserved terminal-order index");
+    }
+    if (_is_terminal(root) or indices.empty()) {
+        return Robdd(this,root);
+    }
+
+    std::map<NodeRef,NodeRef> memo;
+    std::function<NodeRef(NodeRef)> rebuild = [&](NodeRef ref) -> NodeRef {
+        if (_is_terminal(ref)) {
+            return ref;
+        }
+        NodeRef regular = ref & ~NodeRef(1u);
+        auto found = memo.find(regular);
+        if (found == memo.end()) {
+            Node node = _node(regular);
+            NodeRef low = rebuild(node.low);
+            NodeRef high = rebuild(node.high);
+            auto replacement = indices.find(node.variable.index());
+            SizeType destination = replacement == indices.end()
+                ? node.variable.index() : replacement->second;
+            // A general simultaneous substitution may reverse the variable
+            // order or identify variables. _make_node alone is not valid here.
+            NodeRef variable = _make_node(BddVariable(destination),FALSE_NODE,TRUE_NODE);
+            NodeRef renamed = _ite(variable,high,low);
+            found = memo.emplace(regular,renamed).first;
+        }
+        return _is_complemented(ref) ? _negate(found->second) : found->second;
+    };
+    return Robdd(this,rebuild(root));
 }
 
 Robdd RobddManager::negation(Robdd const& value) {

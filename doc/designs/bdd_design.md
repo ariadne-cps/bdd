@@ -371,8 +371,8 @@ ROBDD core + complemented edges               [implemented]
     |
     +-- exhaustive/random semantic tests       [implemented]
     +-- structural inspection/construction     [implemented]
-    +-- support / shift / renaming             [next]
-    +-- restriction / quantification / and_exists
+    +-- support / shift / renaming             [implemented]
+    +-- restriction / quantification / and_exists [next]
     +-- N-tree compatibility and paving workloads
     +-- concurrent unique/computed tables
     +-- structured parallel recursion
@@ -991,3 +991,48 @@ Validation: the provided report establishes the pre-change uncovered
 branch; the new test requires C++/CI execution before claiming full
 branch coverage for the updated commit. Next milestone remains M2
 (`support`, `shift`, `rename`).
+
+### 2026-11-06 - M2: support, ordered shift and general simultaneous rename
+
+Implemented three public `RobddManager` operations for paving-oriented
+manipulation of the fixed variable order:
+
+- `support(root)` lists unique variable indices in ascending order, using
+  visited physical nodes to avoid traversing shared DAG subgraphs twice.
+  Complement polarity does not affect support.
+- `shift(root, signed_offset)` uniformly translates all indices, preserving
+  their order and canonical sharing. A full support preflight rejects
+  underflow, overflow and the maximum-`SizeType` sentinel before creating
+  new nodes. It handles the most-negative signed offset without signed
+  negation overflow. Terminals and zero shifts retain their roots.
+- `rename(root, index_map)` performs simultaneous substitution; entries not
+  in the map retain their index. Non-monotone mappings (including swaps) and
+  non-injective mappings (identifying variables) are supported. Recursive
+  rebuild uses `ITE` rather than raw node relabeling, so the result is
+  reduced and ordered even when the new parent variable would otherwise
+  follow a child. All map entries are validated against the reserved index,
+  including unused keys.
+- Both transformations memoize normalized physical references. Incoming
+  complemented-edge polarity is reapplied after memoized reconstruction;
+  the shared source DAG is not modified.
+- Python bindings expose `support` as a list of `BddVariable`, `shift`
+  with a signed offset, and `rename` with an integer-to-integer mapping.
+
+Testing added: ordered/skipped support and complemented support, positive
+and negative shifts and reverse shifts, overflow and underflow guards,
+same-manager enforcement, identity and unused mappings, swaps, nonmonotone
+and colliding renames, complemented roots, and all 256 Boolean functions
+on three variables under five simultaneous maps (exhaustively evaluated
+on 16 assignments of four variables). Python covers the same core API
+semantics and errors.
+
+Invariants: no public transform can create an out-of-order ROBDD or use the
+terminal-order sentinel as a variable. Variable identification is a
+substitution, not existential quantification: distinct source variables
+mapped to one destination become the *same* Boolean variable.
+
+Validation: design/source review complete; compilation, C++/Python tests
+and sanitizer validation require GitHub CI on the committed change.
+The next milestone is M3: restriction, existential quantification and
+`and_exists`, with semantic equivalence tests against independent truth
+tables and careful distinction between restrictions and top-only cofactors.

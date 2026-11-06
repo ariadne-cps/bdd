@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <future>
 #include <limits>
+#include <map>
 #include <vector>
 
 #include "ariadne-testing.hpp"
@@ -163,6 +164,143 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.high(other_value));
         ARIADNE_TESTING_EXPECT_EXCEPTION(
             manager.make_node(BddVariable(0u),f,other_value));
+    }
+
+    void test_support() {
+        RobddManager manager;
+        auto f = manager.constant(false);
+        auto t = manager.constant(true);
+        auto x = manager.variable(1u);
+        auto z = manager.variable(5u);
+
+        ARIADNE_TESTING_PROVE(manager.support(f).empty());
+        ARIADNE_TESTING_PROVE(manager.support(t).empty());
+        auto function = manager.ite(x,z,manager.negation(z));
+        auto variables = manager.support(function);
+        ARIADNE_TESTING_EXPECT_EQUAL(variables.size(),2u);
+        ARIADNE_TESTING_EXPECT_EQUAL(variables.at(0u).index(),1u);
+        ARIADNE_TESTING_EXPECT_EQUAL(variables.at(1u).index(),5u);
+        auto opposite = manager.support(manager.negation(function));
+        ARIADNE_TESTING_PROVE(variables == opposite);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.support(manager.make_node(BddVariable(0u),z,z)).size(),1u);
+
+        RobddManager foreign;
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.support(foreign.variable(1u)));
+    }
+
+    void test_shift() {
+        RobddManager manager;
+        auto f = manager.constant(false);
+        auto x = manager.variable(1u);
+        auto z = manager.variable(4u);
+        auto formula = manager.conjunction(x,manager.negation(z));
+
+        ARIADNE_TESTING_PROVE(manager.shift(f,13) == f);
+        ARIADNE_TESTING_PROVE(manager.shift(manager.constant(true),-13).is_true());
+        SizeType before = manager.node_count();
+        ARIADNE_TESTING_PROVE(manager.shift(formula,0) == formula);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.node_count(),before);
+
+        auto moved_up = manager.shift(formula,2);
+        auto expected_up = manager.conjunction(
+            manager.variable(3u),manager.negation(manager.variable(6u)));
+        ARIADNE_TESTING_PROVE(moved_up == expected_up);
+        auto moved_down = manager.shift(formula,-1);
+        auto expected_down = manager.conjunction(
+            manager.variable(0u),manager.negation(manager.variable(3u)));
+        ARIADNE_TESTING_PROVE(moved_down == expected_down);
+        ARIADNE_TESTING_PROVE(
+            manager.shift(manager.negation(formula),2) == manager.negation(moved_up));
+        ARIADNE_TESTING_PROVE(manager.shift(moved_up,-2) == formula);
+
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.shift(formula,-2));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.shift(formula,std::numeric_limits<std::ptrdiff_t>::min()));
+        SizeType max_index = std::numeric_limits<SizeType>::max();
+        auto near_max = manager.variable(max_index-2u);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.shift(near_max,3));
+
+        RobddManager foreign;
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.shift(foreign.variable(1u),1));
+    }
+
+    void test_rename() {
+        RobddManager manager;
+        auto x = manager.variable(0u);
+        auto y = manager.variable(2u);
+        auto formula = manager.conjunction(x,manager.negation(y));
+
+        ARIADNE_TESTING_PROVE(manager.rename(formula,{}) == formula);
+        ARIADNE_TESTING_PROVE(manager.rename(manager.constant(true),{{0u,3u}}).is_true());
+        ARIADNE_TESTING_PROVE(manager.rename(formula,{{0u,0u},{2u,2u}}) == formula);
+        auto swapped = manager.rename(formula,{{0u,2u},{2u,0u}});
+        ARIADNE_TESTING_PROVE(swapped == manager.conjunction(y,manager.negation(x)));
+        auto reordered = manager.rename(formula,{{0u,3u},{2u,1u}});
+        ARIADNE_TESTING_PROVE(reordered == manager.conjunction(
+            manager.variable(3u),manager.negation(manager.variable(1u))));
+
+        ARIADNE_TESTING_PROVE(manager.rename(formula,{{0u,2u}}).is_false());
+        ARIADNE_TESTING_PROVE(manager.rename(formula,{{0u,3u},{2u,3u}}).is_false());
+        auto complement = manager.negation(formula);
+        ARIADNE_TESTING_PROVE(
+            manager.rename(complement,{{0u,2u},{2u,0u}}) == manager.negation(swapped));
+        ARIADNE_TESTING_PROVE(manager.rename(formula,{{5u,6u}}) == formula);
+
+        SizeType sentinel = std::numeric_limits<SizeType>::max();
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.rename(formula,{{0u,sentinel}}));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.rename(formula,{{sentinel,0u}}));
+
+        RobddManager foreign;
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.rename(foreign.variable(0u),{}));
+    }
+
+    void test_rename_truth_tables() {
+        RobddManager manager;
+        std::array<Robdd,3> variables {
+            manager.variable(0u),manager.variable(1u),manager.variable(2u)
+        };
+        std::array<std::map<SizeType,SizeType>,5> mappings {{
+            {{0u,1u},{1u,0u}},
+            {{0u,2u},{2u,0u}},
+            {{0u,3u},{1u,2u},{2u,1u}},
+            {{0u,1u},{1u,1u}},
+            {{1u,3u},{2u,3u}}
+        }};
+        char const* const assignments[16] = {
+            "0000","1000","0100","1100","0010","1010","0110","1110",
+            "0001","1001","0101","1101","0011","1011","0111","1111"
+        };
+        for (unsigned mask=0u; mask!=256u; ++mask) {
+            Robdd source = manager.constant(false);
+            for (unsigned combination=0u; combination!=8u; ++combination) {
+                if (((mask >> combination) & 1u) == 0u) continue;
+                Robdd cube = manager.constant(true);
+                for (SizeType index=0u; index!=3u; ++index) {
+                    Robdd literal = ((combination >> index) & 1u)
+                        ? variables[index] : manager.negation(variables[index]);
+                    cube = manager.conjunction(cube,literal);
+                }
+                source = manager.disjunction(source,cube);
+            }
+            for (auto const& mapping : mappings) {
+                Robdd renamed = manager.rename(source,mapping);
+                for (unsigned assignment=0u; assignment!=16u; ++assignment) {
+                    unsigned original_assignment = 0u;
+                    for (SizeType index=0u; index!=3u; ++index) {
+                        auto found = mapping.find(index);
+                        SizeType destination = found == mapping.end() ? index : found->second;
+                        if (((assignment >> destination) & 1u) != 0u) {
+                            original_assignment |= (1u << index);
+                        }
+                    }
+                    Bool expected = ((mask >> original_assignment) & 1u) != 0u;
+                    ARIADNE_TESTING_EXPECT_EQUAL(
+                        manager.evaluate(renamed,make_binary_word(assignments[assignment])),
+                        expected);
+                }
+            }
+        }
     }
 
     void test_exhaustive_three_variable_truth_tables() {
@@ -341,6 +479,10 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_complement_cases);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_complemented_edge_sharing);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_structural_inspection_and_reconstruction);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_support);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_shift);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_rename);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_rename_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_exhaustive_three_variable_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_randomized_four_variable_formulas);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);

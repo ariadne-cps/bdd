@@ -61,3 +61,33 @@ def test_robdd_structural_inspection():
     other = RobddManager()
     with pytest.raises(Exception):
         manager.make_node(BddVariable(0), false, other.variable(4))
+
+def test_robdd_support_shift_rename():
+    import pytest
+
+    manager = RobddManager()
+    x = manager.variable(1)
+    z = manager.variable(4)
+    formula = manager.conjunction(x, manager.negation(z))
+
+    assert [variable.index() for variable in manager.support(formula)] == [1, 4]
+    assert [variable.index() for variable in manager.support(manager.negation(formula))] == [1, 4]
+    assert manager.support(manager.constant(False)) == []
+    assert manager.shift(formula, 0) == formula
+    assert manager.shift(formula, 2) == manager.conjunction(
+        manager.variable(3), manager.negation(manager.variable(6)))
+    assert manager.shift(formula, -1) == manager.conjunction(
+        manager.variable(0), manager.negation(manager.variable(3)))
+    with pytest.raises(Exception):
+        manager.shift(formula, -2)
+
+    swapped = manager.rename(formula, {1: 4, 4: 1})
+    assert swapped == manager.conjunction(z, manager.negation(x))
+    assert manager.rename(formula, {1: 4}).is_false()
+    assert manager.rename(formula, {1: 5, 4: 2}) == manager.conjunction(
+        manager.variable(5), manager.negation(manager.variable(2)))
+    assert manager.rename(manager.negation(formula), {1: 4, 4: 1}) == manager.negation(swapped)
+
+    other = RobddManager()
+    with pytest.raises(Exception):
+        manager.rename(other.variable(1), {1: 3})

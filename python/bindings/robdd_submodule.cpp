@@ -64,6 +64,18 @@ void robdd_submodule(pybind11::module& module) {
                 return manager.make_node(variable,low,high);
             },
             pybind11::keep_alive<0,1>())
+        .def("support",&RobddManager::support)
+        .def("shift",
+            [](RobddManager& manager, Robdd const& value, std::ptrdiff_t offset) {
+                return manager.shift(value,offset);
+            },
+            pybind11::keep_alive<0,1>())
+        .def("rename",
+            [](RobddManager& manager, Robdd const& value,
+               std::map<SizeType,SizeType> const& indices) {
+                return manager.rename(value,indices);
+            },
+            pybind11::keep_alive<0,1>())
         .def("negation",
             [](RobddManager& manager, Robdd const& value) {
                 return manager.negation(value);
