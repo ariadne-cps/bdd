@@ -1102,51 +1102,64 @@ committing this change. The next milestone is M4: depth-aware traversal
 and enabled-cell enumeration/counting for N-tree paving, especially for
 skipped BDD variables and terminal subtrees.
 
-### 2026-11-06 - M4: finite-depth enabled-cell counting and streaming traversal
+### 2026-11-06 - M4: counting and enumerating satisfying assignments
 
-Implemented explicit depth-aware paving interpretation on top of immutable
-ROBDD roots, matching the binary-subdivision semantics of the historical
-`BDDTreeSet::_enabled_cells_number`:
+Implemented a generic Boolean interpretation of an ROBDD over an explicitly
+declared finite variable universe, independent of any application-specific
+representation.
 
-- `enabled_cell_count(root, depth, first_variable=0)` counts satisfying
-  binary words of exactly `depth` levels, corresponding to the interval
-  `[first_variable, first_variable+depth)`. A skipped BDD variable
-  contributes a factor of two; a true terminal contributes all completions
-  of its remaining logical prefix; false contributes zero. Computation
-  memoizes (semantic NodeRef, incoming logical level), without explicitly
-  expanding skipped subtrees.
-- The count is exact within `SizeType` and raises a precondition
-  exception when the number of enabled words exceeds its capacity, with
-  checked summation, skipped-level multiplication and terminal power-of-two
-  calculation. In particular `true` at depth zero denotes one empty word,
-  and `false` at any valid depth denotes no words.
-- `for_each_enabled_cell(root, depth, callback, first_variable=0)`
-  streams words as `BinaryWord` values of exactly `depth` bits in
-  low-before-high lexicographic order. Both choices are visited for
-  skipped variables or true terminal continuations. The root manager
-  and all supported variable indices are validated against the finite
-  subdivision domain; out-of-domain variables cannot be silently ignored.
-- The C++ callback interface does not collect all words and hence avoids
-  materializing an exponentially large vector. Python exposes an
-  `enabled_cell_count` equivalent and a bounded
-  `enabled_cells(root, depth, max_cells, first_variable=0)` convenience
-  whose required `max_cells` parameter is checked against the exact
-  count before allocating the returned list.
-- Neither operation changes the ROBDD, performs a `mince` operation on
-  physical nodes, nor changes `node_count`. Paving geometry (root cell,
-  grid splitting policy, height) remains in the higher-level paving layer.
+- `model_count(root, variable_count, first_variable_index=0)` returns the
+  number of satisfying assignments over the consecutive variables
+  `[first_variable_index, first_variable_index + variable_count)`. Every
+  variable in the ROBDD's support must belong to this universe. Variables
+  absent from the support are don't-care variables: both values contribute
+  to the count. The false terminal has zero models, and the true terminal
+  has exactly `2^variable_count` models, provided the result fits SizeType.
+  An empty universe has one model for true (the empty assignment).
+- The implementation computes an exact count without materializing models.
+  It memoizes pairs of semantic node references and the current variable
+  index, thereby accounting for skipped variables and shared subgraphs.
+  Arithmetic is checked for overflow, including the terminal power of two,
+  accumulation across branches and multiplication by don't-care factors.
+- `for_each_satisfying_assignment(root, variable_count, visitor,
+  first_variable_index=0)` invokes a callback for each satisfying
+  `BinaryWord`, in lexicographic bit order. The bit at position `i`
+  represents the variable `first_variable_index+i`. Unconstrained
+  variables are expanded into both valuations. The operation streams
+  results through a callback rather than storing them.
+- Python exposes `model_count` and a bounded
+  `satisfying_assignments(root, variable_count, max_assignments,
+  first_variable_index=0)` convenience method. The caller-supplied
+  `max_assignments` limit is checked against the exact model count before
+  allocating a Python list.
+- The variable universe is validated on both APIs. A root depending on a
+  variable outside the declared universe is rejected rather than silently
+  projected. A model count that does not fit `SizeType` raises an
+  exception; streaming enumeration has no count-size restriction.
+  Neither algorithm mutates the ROBDD.
 
-Regression coverage includes empty/full at depth zero and positive depths,
-skipped root/interior/tail levels, complemented roots, offset variable
-domains, stable enumeration order, out-of-range variables and manager
-separation, count and depth overflow, and a successful depth reaching the
-`SizeType` bit width when exactly one cell is enabled. All 256 truth
-tables of three variables are checked against independent enabled-cell
-sets and cardinalities, including one extra implicit tail level.
-Python tests exercise counting, bounded enumeration and validation.
+Regression coverage includes false/true terminals, zero-variable
+universes, omitted variables before/between/after support indices,
+complemented references, nonzero variable-universe origins, stable
+enumeration order, invalid universes and manager separation, and
+correctly bounded count overflow. All 256 Boolean truth tables of three
+variables are checked against independently constructed satisfying
+assignment sets and counts, including an additional unconstrained
+variable.
 
-Validation: source reviewed; C++/Python compilation, test execution,
-sanitizers and coverage require CI results for the new commit. Next step
-is M5: integrate these primitives with the geometric paving layer and
-reproduce the historically tested `BDDTreeSet` operations against the
-explicit tree implementation.
+A CI failure revealed one incorrect test expectation in the original
+M4 change: a Boolean function depending only on the final variable in
+an `N`-variable universe has `2^(N-1)` models, which fits in an
+`N`-bit unsigned `SizeType`. Corrected that assertion to check the
+exact representable count instead of expecting an exception. The
+implementation was not modified to accommodate the mistaken test.
+
+Naming decision: these are general ROBDD model-counting and model-
+enumeration operations. Application-specific interpretations belong
+outside the BDD API. The public names and argument labels were updated
+in C++, Python and tests in this same change.
+
+Validation: static inspection completed; C++/Python test execution,
+sanitizers and coverage for the corrected and renamed interfaces are
+pending on the new commit. Next milestone is higher-level integration
+against an independent reference implementation.

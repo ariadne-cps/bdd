@@ -364,14 +364,14 @@ Bool RobddManager::evaluate(
     return current == TRUE_NODE;
 }
 
-SizeType RobddManager::enabled_cell_count(
-        Robdd const& value, SizeType depth, SizeType first_variable) const {
+SizeType RobddManager::model_count(
+        Robdd const& value, SizeType variable_count, SizeType first_variable_index) const {
     NodeRef root = _validate(value);
-    SizeType end = _validate_cell_domain(root,depth,first_variable);
+    SizeType end = _validate_variable_domain(root,variable_count,first_variable_index);
     constexpr SizeType max_count = std::numeric_limits<SizeType>::max();
     constexpr SizeType count_bits = std::numeric_limits<SizeType>::digits;
 
-    // Memoize semantic references AND the current subdivision level: the
+    // Memoize semantic references AND the current universe index: the
     // same physical DAG node may be reached after different skipped levels.
     std::map<std::pair<NodeRef,SizeType>,SizeType> memo;
     std::function<SizeType(NodeRef,SizeType)> count =
@@ -382,7 +382,7 @@ SizeType RobddManager::enabled_cell_count(
             if (ref == TRUE_NODE) {
                 SizeType remaining = end - level;
                 ARIADNE_PRECONDITION_MSG(remaining < count_bits,
-                    "Enabled-cell count exceeds SizeType capacity");
+                    "Model count exceeds SizeType capacity");
                 return SizeType(1u) << remaining;
             }
 
@@ -397,27 +397,27 @@ SizeType RobddManager::enabled_cell_count(
             SizeType low_count = count(branches.first,top+1u);
             SizeType high_count = count(branches.second,top+1u);
             ARIADNE_PRECONDITION_MSG(low_count <= max_count - high_count,
-                "Enabled-cell count exceeds SizeType capacity");
+                "Model count exceeds SizeType capacity");
             SizeType subtotal = low_count + high_count;
             SizeType skipped = top - level;
             ARIADNE_PRECONDITION_MSG(
                 skipped < count_bits and subtotal <= (max_count >> skipped),
-                "Enabled-cell count exceeds SizeType capacity");
+                "Model count exceeds SizeType capacity");
             SizeType result = subtotal << skipped;
             memo.emplace(key,result);
             return result;
         };
-    return count(root,first_variable);
+    return count(root,first_variable_index);
 }
 
-void RobddManager::for_each_enabled_cell(
-        Robdd const& value, SizeType depth,
+void RobddManager::for_each_satisfying_assignment(
+        Robdd const& value, SizeType variable_count,
         std::function<void(BinaryWord const&)> const& visitor,
-        SizeType first_variable) const {
+        SizeType first_variable_index) const {
     NodeRef root = _validate(value);
-    SizeType end = _validate_cell_domain(root,depth,first_variable);
+    SizeType end = _validate_variable_domain(root,variable_count,first_variable_index);
     ARIADNE_PRECONDITION_MSG(static_cast<Bool>(visitor),
-        "Enabled-cell visitor must be nonempty");
+        "Satisfying-assignment visitor must be nonempty");
 
     BinaryWord word;
     std::function<void(NodeRef,SizeType)> traverse =
@@ -426,7 +426,7 @@ void RobddManager::for_each_enabled_cell(
                 return;
             }
             if (level == end) {
-                // Domain validation guarantees there are no remaining nodes.
+                // Universe validation guarantees there are no remaining nodes.
                 visitor(word);
                 return;
             }
@@ -438,15 +438,15 @@ void RobddManager::for_each_enabled_cell(
                 low = branches.first;
                 high = branches.second;
             }
-            // For a skipped level or true terminal both choices have
-            // identical subfunctions, but correspond to distinct cells.
+            // For a don't-care variable or true terminal both choices have
+            // identical subfunctions, but represent distinct assignments.
             word.append(false);
             traverse(low,level+1u);
             word.set_back(true);
             traverse(high,level+1u);
             word.pop_back();
         };
-    traverse(root,first_variable);
+    traverse(root,first_variable_index);
 }
 
 SizeType RobddManager::node_count() const {
@@ -460,13 +460,13 @@ RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
     return value._root;
 }
 
-SizeType RobddManager::_validate_cell_domain(
-        NodeRef root, SizeType depth, SizeType first_variable) const {
+SizeType RobddManager::_validate_variable_domain(
+        NodeRef root, SizeType variable_count, SizeType first_variable_index) const {
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
     ARIADNE_PRECONDITION_MSG(
-        first_variable < max_index and depth <= max_index - first_variable,
-        "Enabled-cell subdivision range exceeds valid variable indices");
-    SizeType end = first_variable + depth;
+        first_variable_index < max_index and variable_count <= max_index - first_variable_index,
+        "Variable universe exceeds valid variable indices");
+    SizeType end = first_variable_index + variable_count;
 
     std::set<NodeRef> visited;
     std::function<void(NodeRef)> check = [&](NodeRef ref) {
@@ -479,8 +479,8 @@ SizeType RobddManager::_validate_cell_domain(
         }
         Node node = _node(regular);
         ARIADNE_PRECONDITION_MSG(
-            node.variable.index() >= first_variable and node.variable.index() < end,
-            "ROBDD support lies outside the finite subdivision domain");
+            node.variable.index() >= first_variable_index and node.variable.index() < end,
+            "ROBDD support lies outside the declared variable universe");
         check(node.low);
         check(node.high);
     };

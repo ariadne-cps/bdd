@@ -126,23 +126,26 @@ class RobddManager {
 
     Bool evaluate(Robdd const& value, BinaryWord const& assignment) const;
 
-    //! \brief Count satisfying cells within a finite binary subdivision depth.
-    //! \details Positions [first_variable, first_variable + depth) define
-    //! the subdivision levels. Every supported variable must lie inside
-    //! that interval. Skipped levels and true terminals expand implicitly.
-    //! An exception is raised if the exact count does not fit SizeType.
-    SizeType enabled_cell_count(
-        Robdd const& value, SizeType depth, SizeType first_variable = 0u) const;
+    //! \brief Count satisfying assignments over a finite variable universe.
+    //! \details The universe contains variable_count consecutive variables
+    //! starting at first_variable_index. Variables absent from the support
+    //! are unconstrained (don't-care). Each satisfying assignment is counted
+    //! once, including all valuations of unconstrained variables.
+    //! Throws if the exact count cannot be represented by SizeType.
+    SizeType model_count(
+        Robdd const& value, SizeType variable_count,
+        SizeType first_variable_index = 0u) const;
 
-    //! \brief Visit enabled cells as binary words in low-before-high order.
-    //! \details Each emitted word has exactly depth bits, corresponding to
-    //! successive subdivision levels starting at first_variable.
-    //! Visits are streamed: no full cell collection is materialized.
+    //! \brief Visit all satisfying assignments in lexicographic bit order.
+    //! \details Each word has variable_count bits, ordered by increasing
+    //! variable index starting at first_variable_index. Unconstrained
+    //! variables take both values. The callback receives each word during
+    //! traversal; all results are not materialized.
     //! The callback must be nonempty and must not mutate this manager.
-    void for_each_enabled_cell(
-        Robdd const& value, SizeType depth,
+    void for_each_satisfying_assignment(
+        Robdd const& value, SizeType variable_count,
         std::function<void(BinaryWord const&)> const& visitor,
-        SizeType first_variable = 0u) const;
+        SizeType first_variable_index = 0u) const;
 
     //! \brief Number of unique physical non-terminal nodes owned by the manager.
     SizeType node_count() const;
@@ -168,8 +171,9 @@ class RobddManager {
     static NodeRef _make_regular_node_ref(SizeType index) { return (index + 1u) << 1u; }
 
     NodeRef _validate(Robdd const& value) const;
-    SizeType _validate_cell_domain(
-        NodeRef root, SizeType depth, SizeType first_variable) const;
+    SizeType _validate_variable_domain(
+        NodeRef root, SizeType variable_count,
+        SizeType first_variable_index) const;
     Node _node(NodeRef ref) const;
     SizeType _top_variable(NodeRef ref) const;
     std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;

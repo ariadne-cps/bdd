@@ -123,24 +123,24 @@ void robdd_submodule(pybind11::module& module) {
             },
             pybind11::keep_alive<0,1>())
         .def("evaluate",&RobddManager::evaluate)
-        .def("enabled_cell_count",&RobddManager::enabled_cell_count,
-            pybind11::arg("value"),pybind11::arg("depth"),
-            pybind11::arg("first_variable")=0u)
-        .def("enabled_cells",
+        .def("model_count",&RobddManager::model_count,
+            pybind11::arg("value"),pybind11::arg("variable_count"),
+            pybind11::arg("first_variable_index")=0u)
+        .def("satisfying_assignments",
             [](RobddManager const& manager, Robdd const& value,
-               SizeType depth, SizeType max_cells, SizeType first_variable) {
-                SizeType count = manager.enabled_cell_count(value,depth,first_variable);
-                if (count > max_cells) {
-                    throw std::length_error("Enabled-cell enumeration exceeds max_cells");
+               SizeType variable_count, SizeType max_assignments, SizeType first_variable_index) {
+                SizeType count = manager.model_count(value,variable_count,first_variable_index);
+                if (count > max_assignments) {
+                    throw std::length_error("Satisfying-assignment enumeration exceeds max_assignments");
                 }
-                std::vector<BinaryWord> cells;
-                cells.reserve(count);
-                manager.for_each_enabled_cell(value,depth,[&](BinaryWord const& cell) {
-                    cells.push_back(cell);
-                },first_variable);
-                return cells;
+                std::vector<BinaryWord> assignments;
+                assignments.reserve(count);
+                manager.for_each_satisfying_assignment(value,variable_count,[&](BinaryWord const& assignment) {
+                    assignments.push_back(assignment);
+                },first_variable_index);
+                return assignments;
             },
-            pybind11::arg("value"),pybind11::arg("depth"),
-            pybind11::arg("max_cells"),pybind11::arg("first_variable")=0u)
+            pybind11::arg("value"),pybind11::arg("variable_count"),
+            pybind11::arg("max_assignments"),pybind11::arg("first_variable_index")=0u)
         .def("node_count",&RobddManager::node_count);
 }
