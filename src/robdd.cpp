@@ -364,6 +364,91 @@ Bool RobddManager::evaluate(
     return current == TRUE_NODE;
 }
 
+SizeType RobddManager::enabled_cell_count(
+        Robdd const& value, SizeType depth, SizeType first_variable) const {
+    NodeRef root = _validate(value);
+    SizeType end = _validate_cell_domain(root,depth,first_variable);
+    constexpr SizeType max_count = std::numeric_limits<SizeType>::max();
+    constexpr SizeType count_bits = std::numeric_limits<SizeType>::digits;
+
+    // Memoize semantic references AND the current subdivision level: the
+    // same physical DAG node may be reached after different skipped levels.
+    std::map<std::pair<NodeRef,SizeType>,SizeType> memo;
+    std::function<SizeType(NodeRef,SizeType)> count =
+        [&](NodeRef ref, SizeType level) -> SizeType {
+            if (ref == FALSE_NODE) {
+                return 0u;
+            }
+            if (ref == TRUE_NODE) {
+                SizeType remaining = end - level;
+                ARIADNE_PRECONDITION_MSG(remaining < count_bits,
+                    "Enabled-cell count exceeds SizeType capacity");
+                return SizeType(1u) << remaining;
+            }
+
+            auto key = std::make_pair(ref,level);
+            auto found = memo.find(key);
+            if (found != memo.end()) {
+                return found->second;
+            }
+
+            SizeType top = _top_variable(ref);
+            auto branches = _cofactor(ref,top);
+            SizeType low_count = count(branches.first,top+1u);
+            SizeType high_count = count(branches.second,top+1u);
+            ARIADNE_PRECONDITION_MSG(low_count <= max_count - high_count,
+                "Enabled-cell count exceeds SizeType capacity");
+            SizeType subtotal = low_count + high_count;
+            SizeType skipped = top - level;
+            ARIADNE_PRECONDITION_MSG(
+                skipped < count_bits and subtotal <= (max_count >> skipped),
+                "Enabled-cell count exceeds SizeType capacity");
+            SizeType result = subtotal << skipped;
+            memo.emplace(key,result);
+            return result;
+        };
+    return count(root,first_variable);
+}
+
+void RobddManager::for_each_enabled_cell(
+        Robdd const& value, SizeType depth,
+        std::function<void(BinaryWord const&)> const& visitor,
+        SizeType first_variable) const {
+    NodeRef root = _validate(value);
+    SizeType end = _validate_cell_domain(root,depth,first_variable);
+    ARIADNE_PRECONDITION_MSG(static_cast<Bool>(visitor),
+        "Enabled-cell visitor must be nonempty");
+
+    BinaryWord word;
+    std::function<void(NodeRef,SizeType)> traverse =
+        [&](NodeRef ref, SizeType level) {
+            if (ref == FALSE_NODE) {
+                return;
+            }
+            if (level == end) {
+                // Domain validation guarantees there are no remaining nodes.
+                visitor(word);
+                return;
+            }
+
+            NodeRef low = ref;
+            NodeRef high = ref;
+            if (ref != TRUE_NODE and _top_variable(ref) == level) {
+                auto branches = _cofactor(ref,level);
+                low = branches.first;
+                high = branches.second;
+            }
+            // For a skipped level or true terminal both choices have
+            // identical subfunctions, but correspond to distinct cells.
+            word.append(false);
+            traverse(low,level+1u);
+            word.set_back(true);
+            traverse(high,level+1u);
+            word.pop_back();
+        };
+    traverse(root,first_variable);
+}
+
 SizeType RobddManager::node_count() const {
     std::lock_guard<std::mutex> lock(_mutex);
     return _nodes.size();
@@ -373,6 +458,34 @@ RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
         "ROBDD operands must belong to the same manager");
     return value._root;
+}
+
+SizeType RobddManager::_validate_cell_domain(
+        NodeRef root, SizeType depth, SizeType first_variable) const {
+    constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
+    ARIADNE_PRECONDITION_MSG(
+        first_variable < max_index and depth <= max_index - first_variable,
+        "Enabled-cell subdivision range exceeds valid variable indices");
+    SizeType end = first_variable + depth;
+
+    std::set<NodeRef> visited;
+    std::function<void(NodeRef)> check = [&](NodeRef ref) {
+        if (_is_terminal(ref)) {
+            return;
+        }
+        NodeRef regular = ref & ~NodeRef(1u);
+        if (not visited.insert(regular).second) {
+            return;
+        }
+        Node node = _node(regular);
+        ARIADNE_PRECONDITION_MSG(
+            node.variable.index() >= first_variable and node.variable.index() < end,
+            "ROBDD support lies outside the finite subdivision domain");
+        check(node.low);
+        check(node.high);
+    };
+    check(root);
+    return end;
 }
 
 RobddManager::Node RobddManager::_node(NodeRef ref) const {

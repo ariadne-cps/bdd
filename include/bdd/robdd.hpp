@@ -17,6 +17,7 @@
 #define ARIADNE_BDD_ROBDD_HPP
 
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <set>
@@ -125,6 +126,24 @@ class RobddManager {
 
     Bool evaluate(Robdd const& value, BinaryWord const& assignment) const;
 
+    //! \brief Count satisfying cells within a finite binary subdivision depth.
+    //! \details Positions [first_variable, first_variable + depth) define
+    //! the subdivision levels. Every supported variable must lie inside
+    //! that interval. Skipped levels and true terminals expand implicitly.
+    //! An exception is raised if the exact count does not fit SizeType.
+    SizeType enabled_cell_count(
+        Robdd const& value, SizeType depth, SizeType first_variable = 0u) const;
+
+    //! \brief Visit enabled cells as binary words in low-before-high order.
+    //! \details Each emitted word has exactly depth bits, corresponding to
+    //! successive subdivision levels starting at first_variable.
+    //! Visits are streamed: no full cell collection is materialized.
+    //! The callback must be nonempty and must not mutate this manager.
+    void for_each_enabled_cell(
+        Robdd const& value, SizeType depth,
+        std::function<void(BinaryWord const&)> const& visitor,
+        SizeType first_variable = 0u) const;
+
     //! \brief Number of unique physical non-terminal nodes owned by the manager.
     SizeType node_count() const;
 
@@ -149,6 +168,8 @@ class RobddManager {
     static NodeRef _make_regular_node_ref(SizeType index) { return (index + 1u) << 1u; }
 
     NodeRef _validate(Robdd const& value) const;
+    SizeType _validate_cell_domain(
+        NodeRef root, SizeType depth, SizeType first_variable) const;
     Node _node(NodeRef ref) const;
     SizeType _top_variable(NodeRef ref) const;
     std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;

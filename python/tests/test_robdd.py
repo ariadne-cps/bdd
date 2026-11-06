@@ -131,3 +131,47 @@ def test_robdd_restrict_exists_and_exists():
         manager.exists(other.variable(0), [BddVariable(0)])
     with pytest.raises(Exception):
         manager.and_exists(formula, other.variable(0), [middle])
+
+def test_robdd_enabled_cells_depth():
+    import pytest
+
+    manager = RobddManager()
+    false = manager.constant(False)
+    true = manager.constant(True)
+    x = manager.variable(0)
+    z = manager.variable(2)
+    formula = manager.conjunction(x,manager.negation(z))
+
+    assert manager.enabled_cell_count(false, 5) == 0
+    assert manager.enabled_cell_count(true, 0) == 1
+    assert manager.enabled_cell_count(true, 4) == 16
+    assert manager.enabled_cell_count(formula, 3) == 2
+    assert manager.enabled_cell_count(formula, 5) == 8
+    assert manager.enabled_cell_count(manager.negation(formula), 3) == 6
+    assert manager.enabled_cells(true, 0, 1)[0].__len__() == 0
+    assert manager.enabled_cells(false, 8, 0) == []
+    assert [str(cell) for cell in manager.enabled_cells(formula, 3, 2)] == [
+        "100", "110"
+    ]
+    assert [str(cell) for cell in manager.enabled_cells(formula, 4, 4)] == [
+        "1000", "1001", "1100", "1101"
+    ]
+    shifted = manager.shift(formula, 4)
+    assert [str(cell) for cell in manager.enabled_cells(shifted, 3, 2, 4)] == [
+        "100", "110"
+    ]
+
+    with pytest.raises(Exception):
+        manager.enabled_cells(formula, 3, 1)
+    with pytest.raises(Exception):
+        manager.enabled_cell_count(formula, 2)
+    with pytest.raises(Exception):
+        manager.enabled_cells(formula, 2, 8)
+    with pytest.raises(Exception):
+        manager.enabled_cell_count(manager.variable(0), 1, 1)
+    with pytest.raises(Exception):
+        manager.enabled_cell_count(true, 64)
+
+    other = RobddManager()
+    with pytest.raises(Exception):
+        manager.enabled_cell_count(other.constant(True), 0)

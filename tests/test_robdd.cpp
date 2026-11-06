@@ -483,6 +483,142 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_enabled_cells_finite_depth() {
+        RobddManager manager;
+        auto f = manager.constant(false);
+        auto t = manager.constant(true);
+        auto x0 = manager.variable(0u);
+        auto x2 = manager.variable(2u);
+
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(f,0u),0u);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(t,0u),1u);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(f,5u),0u);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(t,5u),32u);
+
+        std::vector<BinaryWord> empty_depth;
+        manager.for_each_enabled_cell(t,0u,[&](BinaryWord const& word) {
+            empty_depth.push_back(word);
+        });
+        ARIADNE_TESTING_EXPECT_EQUAL(empty_depth.size(),1u);
+        ARIADNE_TESTING_PROVE(empty_depth.front().empty());
+
+        std::vector<BinaryWord> no_cells;
+        manager.for_each_enabled_cell(f,3u,[&](BinaryWord const& word) {
+            no_cells.push_back(word);
+        });
+        ARIADNE_TESTING_PROVE(no_cells.empty());
+
+        auto skipped = manager.conjunction(x0,manager.negation(x2));
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(x2,3u),4u);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(skipped,3u),2u);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(skipped,5u),8u);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.enabled_cell_count(manager.negation(skipped),3u),6u);
+
+        std::vector<BinaryWord> cells;
+        manager.for_each_enabled_cell(skipped,3u,[&](BinaryWord const& word) {
+            cells.push_back(word);
+        });
+        ARIADNE_TESTING_EXPECT_EQUAL(cells.size(),2u);
+        ARIADNE_TESTING_PROVE(cells[0u] == make_binary_word("100"));
+        ARIADNE_TESTING_PROVE(cells[1u] == make_binary_word("110"));
+        SizeType before = manager.node_count();
+        manager.for_each_enabled_cell(manager.negation(skipped),3u,
+            [&](BinaryWord const& word) {
+                ARIADNE_TESTING_PROVE(manager.evaluate(
+                    manager.negation(skipped),word));
+            });
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.node_count(),before);
+
+        auto shifted = manager.shift(skipped,4);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.enabled_cell_count(shifted,3u,4u),2u);
+        std::vector<BinaryWord> offset_cells;
+        manager.for_each_enabled_cell(shifted,3u,[&](BinaryWord const& word) {
+            offset_cells.push_back(word);
+        },4u);
+        ARIADNE_TESTING_PROVE(offset_cells == cells);
+
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(x2,2u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(x2,0u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(x0,2u,1u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.for_each_enabled_cell(
+            x2,2u,[](BinaryWord const&) {}));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.for_each_enabled_cell(
+            x0,1u,std::function<void(BinaryWord const&)>{}));
+
+        SizeType max_index = std::numeric_limits<SizeType>::max();
+        SizeType bits = std::numeric_limits<SizeType>::digits;
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(t,bits));
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(f,bits),0u);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(t,2u,max_index-1u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(t,0u,max_index));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.for_each_enabled_cell(
+            f,2u,[](BinaryWord const&) {},max_index-1u));
+
+        auto near_limit = manager.variable(bits-1u);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(near_limit,bits));
+        auto singleton = manager.constant(true);
+        for (SizeType i=0u; i!=bits; ++i) {
+            singleton = manager.conjunction(singleton,manager.variable(i));
+        }
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.enabled_cell_count(singleton,bits),1u);
+
+        RobddManager foreign;
+        auto foreign_value = foreign.constant(true);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.enabled_cell_count(foreign_value,0u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.for_each_enabled_cell(
+            foreign_value,0u,[](BinaryWord const&) {}));
+    }
+
+    void test_enabled_cells_truth_tables() {
+        RobddManager manager;
+        std::array<Robdd,3> variables {
+            manager.variable(0u),manager.variable(1u),manager.variable(2u)
+        };
+        for (unsigned mask=0u; mask!=256u; ++mask) {
+            Robdd formula = manager.constant(false);
+            for (unsigned assignment=0u; assignment!=8u; ++assignment) {
+                if (((mask >> assignment) & 1u) == 0u) continue;
+                Robdd cube = manager.constant(true);
+                for (SizeType variable=0u; variable!=3u; ++variable) {
+                    Robdd literal = ((assignment >> variable) & 1u)
+                        ? variables[variable] : manager.negation(variables[variable]);
+                    cube = manager.conjunction(cube,literal);
+                }
+                formula = manager.disjunction(formula,cube);
+            }
+
+            std::vector<unsigned> observed;
+            manager.for_each_enabled_cell(formula,3u,[&](BinaryWord const& word) {
+                ARIADNE_TESTING_EXPECT_EQUAL(word.size(),3u);
+                unsigned assignment = 0u;
+                for (unsigned variable=0u; variable!=3u; ++variable) {
+                    if (word[variable]) {
+                        assignment |= (1u << variable);
+                    }
+                }
+                observed.push_back(assignment);
+            });
+            std::sort(observed.begin(),observed.end());
+            std::vector<unsigned> expected;
+            for (unsigned assignment=0u; assignment!=8u; ++assignment) {
+                if (((mask >> assignment) & 1u) != 0u) {
+                    expected.push_back(assignment);
+                }
+            }
+            ARIADNE_TESTING_PROVE(observed == expected);
+            ARIADNE_TESTING_EXPECT_EQUAL(
+                manager.enabled_cell_count(formula,3u),expected.size());
+
+            auto negated = manager.negation(formula);
+            ARIADNE_TESTING_EXPECT_EQUAL(
+                manager.enabled_cell_count(negated,3u),8u-expected.size());
+            ARIADNE_TESTING_EXPECT_EQUAL(
+                manager.enabled_cell_count(formula,4u),2u*expected.size());
+        }
+    }
+
     void test_exhaustive_three_variable_truth_tables() {
         RobddManager manager;
         std::array<Robdd,3> variables {
@@ -665,6 +801,8 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_rename_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_restrict_and_quantification_basics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_quantification_truth_tables);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_enabled_cells_finite_depth);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_enabled_cells_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_exhaustive_three_variable_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_randomized_four_variable_formulas);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);

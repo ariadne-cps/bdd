@@ -373,7 +373,8 @@ ROBDD core + complemented edges               [implemented]
     +-- structural inspection/construction     [implemented]
     +-- support / shift / renaming             [implemented]
     +-- restriction / quantification / and_exists [implemented]
-    +-- N-tree level-aware traversal / paving workloads [next]
+    +-- N-tree level-aware traversal / paving workloads [implemented]
+    +-- N-tree/grid-paving compatibility integration [next]
     +-- concurrent unique/computed tables
     +-- structured parallel recursion
     +-- dynamic ordering (only if justified)
@@ -1100,3 +1101,52 @@ tests, sanitizer results and coverage must be confirmed by CI after
 committing this change. The next milestone is M4: depth-aware traversal
 and enabled-cell enumeration/counting for N-tree paving, especially for
 skipped BDD variables and terminal subtrees.
+
+### 2026-11-06 - M4: finite-depth enabled-cell counting and streaming traversal
+
+Implemented explicit depth-aware paving interpretation on top of immutable
+ROBDD roots, matching the binary-subdivision semantics of the historical
+`BDDTreeSet::_enabled_cells_number`:
+
+- `enabled_cell_count(root, depth, first_variable=0)` counts satisfying
+  binary words of exactly `depth` levels, corresponding to the interval
+  `[first_variable, first_variable+depth)`. A skipped BDD variable
+  contributes a factor of two; a true terminal contributes all completions
+  of its remaining logical prefix; false contributes zero. Computation
+  memoizes (semantic NodeRef, incoming logical level), without explicitly
+  expanding skipped subtrees.
+- The count is exact within `SizeType` and raises a precondition
+  exception when the number of enabled words exceeds its capacity, with
+  checked summation, skipped-level multiplication and terminal power-of-two
+  calculation. In particular `true` at depth zero denotes one empty word,
+  and `false` at any valid depth denotes no words.
+- `for_each_enabled_cell(root, depth, callback, first_variable=0)`
+  streams words as `BinaryWord` values of exactly `depth` bits in
+  low-before-high lexicographic order. Both choices are visited for
+  skipped variables or true terminal continuations. The root manager
+  and all supported variable indices are validated against the finite
+  subdivision domain; out-of-domain variables cannot be silently ignored.
+- The C++ callback interface does not collect all words and hence avoids
+  materializing an exponentially large vector. Python exposes an
+  `enabled_cell_count` equivalent and a bounded
+  `enabled_cells(root, depth, max_cells, first_variable=0)` convenience
+  whose required `max_cells` parameter is checked against the exact
+  count before allocating the returned list.
+- Neither operation changes the ROBDD, performs a `mince` operation on
+  physical nodes, nor changes `node_count`. Paving geometry (root cell,
+  grid splitting policy, height) remains in the higher-level paving layer.
+
+Regression coverage includes empty/full at depth zero and positive depths,
+skipped root/interior/tail levels, complemented roots, offset variable
+domains, stable enumeration order, out-of-range variables and manager
+separation, count and depth overflow, and a successful depth reaching the
+`SizeType` bit width when exactly one cell is enabled. All 256 truth
+tables of three variables are checked against independent enabled-cell
+sets and cardinalities, including one extra implicit tail level.
+Python tests exercise counting, bounded enumeration and validation.
+
+Validation: source reviewed; C++/Python compilation, test execution,
+sanitizers and coverage require CI results for the new commit. Next step
+is M5: integrate these primitives with the geometric paving layer and
+reproduce the historically tested `BDDTreeSet` operations against the
+explicit tree implementation.

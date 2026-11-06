@@ -13,6 +13,8 @@
  *  (at your option) any later version.
  */
 
+#include <stdexcept>
+
 #include "pybind11.hpp"
 #include "bdd/robdd.hpp"
 
@@ -121,5 +123,24 @@ void robdd_submodule(pybind11::module& module) {
             },
             pybind11::keep_alive<0,1>())
         .def("evaluate",&RobddManager::evaluate)
+        .def("enabled_cell_count",&RobddManager::enabled_cell_count,
+            pybind11::arg("value"),pybind11::arg("depth"),
+            pybind11::arg("first_variable")=0u)
+        .def("enabled_cells",
+            [](RobddManager const& manager, Robdd const& value,
+               SizeType depth, SizeType max_cells, SizeType first_variable) {
+                SizeType count = manager.enabled_cell_count(value,depth,first_variable);
+                if (count > max_cells) {
+                    throw std::length_error("Enabled-cell enumeration exceeds max_cells");
+                }
+                std::vector<BinaryWord> cells;
+                cells.reserve(count);
+                manager.for_each_enabled_cell(value,depth,[&](BinaryWord const& cell) {
+                    cells.push_back(cell);
+                },first_variable);
+                return cells;
+            },
+            pybind11::arg("value"),pybind11::arg("depth"),
+            pybind11::arg("max_cells"),pybind11::arg("first_variable")=0u)
         .def("node_count",&RobddManager::node_count);
 }
