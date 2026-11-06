@@ -569,6 +569,15 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         auto almost_all = manager.negation(singleton);
         ARIADNE_TESTING_EXPECT_EQUAL(manager.model_count(almost_all,bits),max_index);
 
+        // Each cofactor of XOR has 2^(bits-1) satisfying assignments over
+        // bits+1 variables: the individual counts fit, but their sum does not.
+        auto xor_first_two = manager.exclusive_or(
+            manager.variable(0u),manager.variable(1u));
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.model_count(xor_first_two,bits),SizeType(1u) << (bits-1u));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.model_count(xor_first_two,bits+1u));
+
         RobddManager foreign;
         auto foreign_value = foreign.constant(true);
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.model_count(foreign_value,0u));

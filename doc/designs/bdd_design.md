@@ -1172,14 +1172,16 @@ while detailed `BRDA` entries record 183/184 taken branches. The only
 explicitly untaken branch is the overflow guard for adding the two
 Boolean cofactors in `RobddManager::model_count` at `src/robdd.cpp:399`.
 
-For a valid reduced ordered Boolean decision diagram over an
-`N`-variable universe, each nonterminal splits assignments into two
-disjoint sets; their sum cannot exceed the maximum representable count
-on a `SizeType`-width universe. On an `N`-bit universe, reaching
-exactly `2^N` satisfying assignments requires the constant-true
-function, which has a terminal root. The guard therefore remains
-defensive; forcing that branch would require violating the
-representation invariants, not a meaningful Boolean formula.
+The initial assessment of this guard as unreachable was incorrect.
+For universes of at most `SizeType::digits` variables, a nonterminal
+cannot have a model count exceeding the capacity of `SizeType`.
+However, the public API permits larger universes. For example, on an
+`N = SizeType::digits + 1` variable universe, the function
+`x0 XOR x1` has `2^(N-1)` satisfying assignments. Its two root
+cofactors each contribute `2^(N-2)` assignments, which fit in
+`SizeType` separately, while their sum exceeds its maximum.
+Consequently, the addition-overflow precondition is both reachable
+and required for correct model counting on valid ROBDDs.
 
 Added a boundary regression for the complement of the conjunction of
 all `N` variables, which has exactly `2^N-1` satisfying assignments
@@ -1214,3 +1216,25 @@ algorithms, Python bindings, tests or threading dependencies were changed.
 Validation: inspected the declared include chain and public method
 declarations. Full build/tests and downstream umbrella-header consumers
 remain subject to the GitHub CI results for this documentation-only commit.
+
+### 2026-11-06 - Exercise reachable model-count addition overflow
+
+Reexamined the branch identified by `coverage(20261106-153414).info`:
+the explicit `BRDA` records show only the arithmetic overflow branch
+at `src/robdd.cpp:399` as unexecuted. Contrary to the previous
+journal interpretation, that branch is reachable for valid functions
+when the declared variable universe exceeds the `SizeType` bit width.
+
+Added a semantic test using `x0 XOR x1`: on a universe of
+`SizeType::digits` variables, its exact count is
+`2^(SizeType::digits-1)` and must succeed; on a universe of
+`SizeType::digits+1` variables, both root cofactor counts fit
+individually but their sum does not, and `model_count` must throw.
+This checks the meaningful edge of the public contract and the
+existing overflow guard without altering any implementation.
+
+Validation: the earlier LCOV report and source branch were inspected;
+build/test and updated coverage for this new regression await GitHub CI.
+The LCOV summary reports more branch entries than the available
+`BRDA` records; no other specific uncovered branch can be identified
+from this report alone.
