@@ -20,6 +20,5 @@
 
 #include "bdd/variable.hpp"
 #include "bdd/robdd.hpp"
-#include "threading/threading_command_line_interface.hpp"
 
 #endif // ARIADNE_BDD_HPP

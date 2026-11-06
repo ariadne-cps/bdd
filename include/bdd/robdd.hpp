@@ -64,22 +64,42 @@ class Robdd {
 //! Physical nodes are canonicalized with a regular low reference.
 class RobddManager {
   public:
+    //! \brief Construct an empty manager for canonical ROBDDs.
+    //! \details The manager owns all nodes and must outlive its Robdd handles.
     RobddManager() = default;
     RobddManager(RobddManager const&) = delete;
     RobddManager& operator=(RobddManager const&) = delete;
 
+    //! \brief Return the Boolean constant false or true.
+    //! \param value The truth value represented by the returned terminal.
+    //! \return A terminal ROBDD owned by this manager.
     Robdd constant(Bool value);
 
+    //! \brief Return the canonical decision diagram for a variable index.
+    //! \param index The variable index in the fixed increasing order.
+    //! \return The Boolean function that equals the selected variable.
+    //! \pre index must be smaller than the reserved maximum SizeType index.
     Robdd variable(SizeType index);
+
+    //! \brief Return the canonical decision diagram for a variable.
+    //! \param variable The variable to represent.
+    //! \return The Boolean function that equals the selected variable.
+    //! \pre The variable index must not be the terminal-order sentinel.
     Robdd variable(BddVariable variable);
 
     //! \brief Return the root variable, or no value for a terminal.
     std::optional<BddVariable> top_variable(Robdd const& value) const;
 
-    //! \brief Return the semantic low/high branch of a non-terminal ROBDD.
-    //! \details A complemented root complements both returned branches.
-    //! Passing a terminal is a precondition violation.
+    //! \brief Return the low cofactor of a non-terminal ROBDD.
+    //! \details Fixes the root variable to false, propagating the
+    //! complement polarity of the incoming reference to the result.
+    //! \pre value must belong to this manager and be non-terminal.
     Robdd low(Robdd const& value) const;
+
+    //! \brief Return the high cofactor of a non-terminal ROBDD.
+    //! \details Fixes the root variable to true, propagating the
+    //! complement polarity of the incoming reference to the result.
+    //! \pre value must belong to this manager and be non-terminal.
     Robdd high(Robdd const& value) const;
 
     //! \brief Build a canonical decision node with the given semantic children.
@@ -118,12 +138,50 @@ class RobddManager {
         Robdd const& lhs, Robdd const& rhs,
         std::vector<BddVariable> const& variables);
 
+    //! \brief Compute the Boolean complement of a function.
+    //! \details Complemented edges make negation a constant-time polarity
+    //! change without allocating a physical decision node.
+    //! \param value The function to complement.
+    //! \return The canonical ROBDD representing NOT value.
+    //! \pre value must belong to this manager.
     Robdd negation(Robdd const& value);
+
+    //! \brief Compute the Boolean conjunction of two functions.
+    //! \return The canonical ROBDD representing lhs AND rhs.
+    //! \pre Both operands must belong to this manager.
     Robdd conjunction(Robdd const& lhs, Robdd const& rhs);
+
+    //! \brief Compute the Boolean disjunction of two functions.
+    //! \return The canonical ROBDD representing lhs OR rhs.
+    //! \pre Both operands must belong to this manager.
     Robdd disjunction(Robdd const& lhs, Robdd const& rhs);
+
+    //! \brief Compute the exclusive disjunction of two functions.
+    //! \return The canonical ROBDD representing lhs XOR rhs.
+    //! \pre Both operands must belong to this manager.
     Robdd exclusive_or(Robdd const& lhs, Robdd const& rhs);
+
+    //! \brief Compute the if-then-else operation on Boolean functions.
+    //! \details The result represents
+    //! (condition AND then_branch) OR (NOT condition AND else_branch).
+    //! The operation is reduced and canonical for the manager's fixed
+    //! variable order; its recursive results are memoized internally.
+    //! \param condition The function choosing between the two branches.
+    //! \param then_branch The function selected where condition is true.
+    //! \param else_branch The function selected where condition is false.
+    //! \return The canonical ROBDD for the conditional Boolean function.
+    //! \pre All three operands must belong to this manager.
     Robdd ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch);
 
+    //! \brief Evaluate a function under a Boolean assignment.
+    //! \details assignment[i] gives the truth value of variable i;
+    //! indices absent from the function's support are ignored.
+    //! Complemented edges are interpreted according to their polarity.
+    //! \param value The function to evaluate.
+    //! \param assignment An assignment providing all supported indices.
+    //! \return The truth value of the function under the assignment.
+    //! \pre value must belong to this manager and assignment must contain
+    //! an entry for every variable in the function's support.
     Bool evaluate(Robdd const& value, BinaryWord const& assignment) const;
 
     //! \brief Count satisfying assignments over a finite variable universe.
@@ -147,7 +205,10 @@ class RobddManager {
         std::function<void(BinaryWord const&)> const& visitor,
         SizeType first_variable_index = 0u) const;
 
-    //! \brief Number of unique physical non-terminal nodes owned by the manager.
+    //! \brief Return the total number of physical non-terminal nodes allocated.
+    //! \details The count covers the manager's entire canonical node table,
+    //! including nodes that are not reachable from any particular root.
+    //! It is not the size of a single ROBDD or a count of satisfying models.
     SizeType node_count() const;
 
   private:

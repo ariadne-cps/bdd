@@ -1192,3 +1192,25 @@ Validation: this analysis is grounded in the uploaded LCOV trace;
 CI/build and coverage for the new boundary test must be confirmed
 on this commit. The difference between summary BRF/BRH totals and
 explicit BRDA entries remains an instrumentation/reporting caveat.
+
+### 2026-11-06 - Remove redundant umbrella include and complete public ROBDD API documentation
+
+Removed the redundant direct inclusion of
+`threading/threading_command_line_interface.hpp` from
+`include/ariadne-bdd.hpp`. The umbrella already includes
+`ariadne-threading.hpp`, which publicly includes that threading header.
+
+Completed Doxygen coverage of the public `RobddManager` operations:
+construction of Boolean constants and variables, negation, conjunction,
+disjunction, exclusive-or, the ternary `ite` Boolean operation and
+evaluation of a function under an assignment. Documented low and high
+cofactors separately, clarified manager ownership/lifetime, and specified
+that `node_count` measures all allocated physical nonterminal nodes,
+not reachable root size or model cardinality.
+
+All descriptions use general Boolean/ROBDD terminology. No C++ signatures,
+algorithms, Python bindings, tests or threading dependencies were changed.
+
+Validation: inspected the declared include chain and public method
+declarations. Full build/tests and downstream umbrella-header consumers
+remain subject to the GitHub CI results for this documentation-only commit.
