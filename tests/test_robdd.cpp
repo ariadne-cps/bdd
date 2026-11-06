@@ -68,6 +68,21 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_PROVE(manager.disjunction(x,y) == manager.disjunction(y,x));
     }
 
+    void test_ite_complement_cases() {
+        RobddManager manager;
+        auto f = manager.constant(false);
+        auto t = manager.constant(true);
+        auto x = manager.variable(0u);
+        auto y = manager.variable(1u);
+
+        auto complement = manager.ite(x,f,t);
+        ARIADNE_TESTING_PROVE(complement == manager.negation(x));
+
+        auto false_then = manager.ite(x,f,y);
+        auto expected = manager.conjunction(manager.negation(x),y);
+        ARIADNE_TESTING_PROVE(false_then == expected);
+    }
+
     void test_complemented_edge_sharing() {
         RobddManager manager;
         auto x = manager.variable(0u);
@@ -164,6 +179,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_threading_command_line);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_constants_and_variables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_boolean_identities);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_complement_cases);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_complemented_edge_sharing);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
