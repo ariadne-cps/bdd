@@ -1163,3 +1163,32 @@ Validation: static inspection completed; C++/Python test execution,
 sanitizers and coverage for the corrected and renamed interfaces are
 pending on the new commit. Next milestone is higher-level integration
 against an independent reference implementation.
+
+### 2026-11-06 - Model-count boundary test and LCOV branch review
+
+The supplied `coverage(9).info` records all 682 instrumented lines and
+all 55 functions covered. Its summary records 204/210 covered branches,
+while detailed `BRDA` entries record 183/184 taken branches. The only
+explicitly untaken branch is the overflow guard for adding the two
+Boolean cofactors in `RobddManager::model_count` at `src/robdd.cpp:399`.
+
+For a valid reduced ordered Boolean decision diagram over an
+`N`-variable universe, each nonterminal splits assignments into two
+disjoint sets; their sum cannot exceed the maximum representable count
+on a `SizeType`-width universe. On an `N`-bit universe, reaching
+exactly `2^N` satisfying assignments requires the constant-true
+function, which has a terminal root. The guard therefore remains
+defensive; forcing that branch would require violating the
+representation invariants, not a meaningful Boolean formula.
+
+Added a boundary regression for the complement of the conjunction of
+all `N` variables, which has exactly `2^N-1` satisfying assignments
+for `N=std::numeric_limits<SizeType>::digits`. Its count must equal
+`std::numeric_limits<SizeType>::max()`, whereas constant true over the
+same universe must raise the existing overflow exception. No
+production algorithm or guard was modified.
+
+Validation: this analysis is grounded in the uploaded LCOV trace;
+CI/build and coverage for the new boundary test must be confirmed
+on this commit. The difference between summary BRF/BRH totals and
+explicit BRDA entries remains an instrumentation/reporting caveat.

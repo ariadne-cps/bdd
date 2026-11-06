@@ -564,6 +564,10 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
             singleton = manager.conjunction(singleton,manager.variable(i));
         }
         ARIADNE_TESTING_EXPECT_EQUAL(manager.model_count(singleton,bits),1u);
+        // The complement has every assignment except the all-true word,
+        // reaching the largest exactly representable model count.
+        auto almost_all = manager.negation(singleton);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.model_count(almost_all,bits),max_index);
 
         RobddManager foreign;
         auto foreign_value = foreign.constant(true);
