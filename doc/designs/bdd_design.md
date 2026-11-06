@@ -932,3 +932,40 @@ Validation status:
   the change;
 - successful compilation, unit-test execution, sanitizer runs and benchmark
   numbers remain to be confirmed by CI after the commit.
+
+
+### 2026-11-06 - Remove regular-edge policy after validation
+
+The temporary regular-edge specialization and its A/B benchmark were removed
+after the complemented-edge implementation had been validated against the
+regular baseline.
+
+Decision:
+
+- complemented edges are now the only ROBDD edge representation;
+- `Robdd` and `RobddManager` are concrete classes again rather than aliases
+  of a policy-specialized template;
+- the `EdgePolicy` abstraction was removed because retaining a single policy
+  no longer justifies the extra indirection;
+- the complemented-edge normalization rule remains unchanged: every physical
+  node stores a regular `low` reference, while complement polarity is carried
+  by the semantic `NodeRef`;
+- negation remains an O(1) polarity toggle and allocates no physical nodes;
+- the regression test for zero-allocation negation and double-negation
+  canonicity remains in place;
+- `benchmark_robdd_complemented_edges` and the regular-edge implementation
+  were removed after serving their comparison purpose.
+
+The measured comparison that motivated this simplification remains documented:
+for the 4095-function complement-closure workload, complemented edges kept the
+physical node count unchanged while the regular baseline doubled it, and
+negation time was substantially lower. The benchmark code itself is no longer
+maintained because there is no longer a second supported implementation to
+compare against.
+
+Validation status:
+
+- the simplification preserves the same complemented-edge encoding and
+  normalization used in the validated comparison;
+- full compile/test/sanitizer validation is delegated to CI for the updated
+  branch.

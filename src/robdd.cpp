@@ -17,139 +17,100 @@
 #include <limits>
 
 #include "utility/macros.hpp"
-#include "bdd/detail/robdd_impl.hpp"
+#include "bdd/robdd.hpp"
 
 namespace Ariadne {
-namespace Detail {
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::constant(Bool value) {
-    return Diagram(this,value ? TRUE_NODE : FALSE_NODE);
+Robdd RobddManager::constant(Bool value) {
+    return Robdd(this,value ? TRUE_NODE : FALSE_NODE);
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::variable(SizeType index) {
+Robdd RobddManager::variable(SizeType index) {
     return variable(BddVariable(index));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::variable(BddVariable variable) {
-    return Diagram(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
+Robdd RobddManager::variable(BddVariable variable) {
+    return Robdd(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::negation(Diagram const& value) {
-    NodeRef root = _validate(value);
-    if constexpr (EdgePolicy::complemented_edges) {
-        return Diagram(this,EdgePolicy::negate(root));
-    } else {
-        return Diagram(this,_ite(root,FALSE_NODE,TRUE_NODE));
-    }
+Robdd RobddManager::negation(Robdd const& value) {
+    return Robdd(this,_negate(_validate(value)));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::conjunction(Diagram const& lhs, Diagram const& rhs) {
+Robdd RobddManager::conjunction(Robdd const& lhs, Robdd const& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    return Diagram(this,_ite(l,r,FALSE_NODE));
+    return Robdd(this,_ite(l,r,FALSE_NODE));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::disjunction(Diagram const& lhs, Diagram const& rhs) {
+Robdd RobddManager::disjunction(Robdd const& lhs, Robdd const& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    return Diagram(this,_ite(l,TRUE_NODE,r));
+    return Robdd(this,_ite(l,TRUE_NODE,r));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::exclusive_or(Diagram const& lhs, Diagram const& rhs) {
+Robdd RobddManager::exclusive_or(Robdd const& lhs, Robdd const& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    NodeRef not_r;
-    if constexpr (EdgePolicy::complemented_edges) {
-        not_r = EdgePolicy::negate(r);
-    } else {
-        not_r = _ite(r,FALSE_NODE,TRUE_NODE);
-    }
-    return Diagram(this,_ite(l,not_r,r));
+    return Robdd(this,_ite(l,_negate(r),r));
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Diagram
-BasicRobddManager<EdgePolicy>::ite(
-        Diagram const& condition,
-        Diagram const& then_branch,
-        Diagram const& else_branch)
+Robdd RobddManager::ite(
+        Robdd const& condition,
+        Robdd const& then_branch,
+        Robdd const& else_branch)
 {
     NodeRef c = _validate(condition);
     NodeRef t = _validate(then_branch);
     NodeRef e = _validate(else_branch);
-    return Diagram(this,_ite(c,t,e));
+    return Robdd(this,_ite(c,t,e));
 }
 
-template<class EdgePolicy>
-Bool BasicRobddManager<EdgePolicy>::evaluate(
-        Diagram const& value,
+Bool RobddManager::evaluate(
+        Robdd const& value,
         BinaryWord const& assignment) const
 {
     NodeRef current = _validate(value);
-    while (not EdgePolicy::is_terminal(current)) {
+    while (not _is_terminal(current)) {
         Node node = _node(current);
         ARIADNE_PRECONDITION_MSG(node.variable.index() < assignment.size(),
             "Missing assignment for BDD variable " << node.variable.index());
 
         NodeRef next = assignment[node.variable.index()] ? node.high : node.low;
-        if constexpr (EdgePolicy::complemented_edges) {
-            if (EdgePolicy::is_complemented(current)) {
-                next = EdgePolicy::negate(next);
-            }
+        if (_is_complemented(current)) {
+            next = _negate(next);
         }
         current = next;
     }
     return current == TRUE_NODE;
 }
 
-template<class EdgePolicy>
-SizeType BasicRobddManager<EdgePolicy>::node_count() const {
+SizeType RobddManager::node_count() const {
     std::lock_guard<std::mutex> lock(_mutex);
     return _nodes.size();
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::NodeRef
-BasicRobddManager<EdgePolicy>::_validate(Diagram const& value) const {
+RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
         "ROBDD operands must belong to the same manager");
     return value._root;
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::Node
-BasicRobddManager<EdgePolicy>::_node(NodeRef ref) const {
+RobddManager::Node RobddManager::_node(NodeRef ref) const {
     std::lock_guard<std::mutex> lock(_mutex);
-    return _nodes[EdgePolicy::node_index(ref)];
+    return _nodes[_node_index(ref)];
 }
 
-template<class EdgePolicy>
-SizeType BasicRobddManager<EdgePolicy>::_top_variable(NodeRef ref) const {
-    if (EdgePolicy::is_terminal(ref)) {
+SizeType RobddManager::_top_variable(NodeRef ref) const {
+    if (_is_terminal(ref)) {
         return std::numeric_limits<SizeType>::max();
     }
     return _node(ref).variable.index();
 }
 
-template<class EdgePolicy>
-std::pair<typename BasicRobddManager<EdgePolicy>::NodeRef,
-          typename BasicRobddManager<EdgePolicy>::NodeRef>
-BasicRobddManager<EdgePolicy>::_cofactor(NodeRef ref, SizeType variable) const {
-    if (EdgePolicy::is_terminal(ref)) {
+std::pair<RobddManager::NodeRef,RobddManager::NodeRef>
+RobddManager::_cofactor(NodeRef ref, SizeType variable) const {
+    if (_is_terminal(ref)) {
         return {ref,ref};
     }
 
@@ -160,36 +121,27 @@ BasicRobddManager<EdgePolicy>::_cofactor(NodeRef ref, SizeType variable) const {
 
     NodeRef low = node.low;
     NodeRef high = node.high;
-    if constexpr (EdgePolicy::complemented_edges) {
-        if (EdgePolicy::is_complemented(ref)) {
-            low = EdgePolicy::negate(low);
-            high = EdgePolicy::negate(high);
-        }
+    if (_is_complemented(ref)) {
+        low = _negate(low);
+        high = _negate(high);
     }
     return {low,high};
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::NodeRef
-BasicRobddManager<EdgePolicy>::_make_node(
-        BddVariable variable,
-        NodeRef low,
-        NodeRef high)
-{
+RobddManager::NodeRef
+RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
     if (low == high) {
         return low;
     }
 
+    // Canonical complemented-edge normalization: every physical node has a
+    // regular low reference. If low is complemented, complement both children
+    // and carry the complement on the reference returned to the caller.
     Bool complement_result = false;
-    if constexpr (EdgePolicy::complemented_edges) {
-        // Canonical complemented-edge normalization: every physical node has
-        // a regular low edge. Negating both children preserves the decision
-        // node up to a complemented reference to its result.
-        if (EdgePolicy::is_complemented(low)) {
-            low = EdgePolicy::negate(low);
-            high = EdgePolicy::negate(high);
-            complement_result = true;
-        }
+    if (_is_complemented(low)) {
+        low = _negate(low);
+        high = _negate(high);
+        complement_result = true;
     }
 
     NodeKey key(variable.index(),low,high);
@@ -202,27 +154,17 @@ BasicRobddManager<EdgePolicy>::_make_node(
         if (found != _unique_table.end()) {
             result = found->second;
         } else {
-            result = EdgePolicy::make_regular_node_ref(_nodes.size());
+            result = _make_regular_node_ref(_nodes.size());
             _nodes.push_back(Node{variable,low,high});
             _unique_table.emplace(key,result);
         }
     }
 
-    if constexpr (EdgePolicy::complemented_edges) {
-        if (complement_result) {
-            result = EdgePolicy::negate(result);
-        }
-    }
-    return result;
+    return complement_result ? _negate(result) : result;
 }
 
-template<class EdgePolicy>
-typename BasicRobddManager<EdgePolicy>::NodeRef
-BasicRobddManager<EdgePolicy>::_ite(
-        NodeRef condition,
-        NodeRef then_branch,
-        NodeRef else_branch)
-{
+RobddManager::NodeRef
+RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) {
     if (condition == TRUE_NODE) {
         return then_branch;
     }
@@ -235,10 +177,8 @@ BasicRobddManager<EdgePolicy>::_ite(
     if (then_branch == TRUE_NODE and else_branch == FALSE_NODE) {
         return condition;
     }
-    if constexpr (EdgePolicy::complemented_edges) {
-        if (then_branch == FALSE_NODE and else_branch == TRUE_NODE) {
-            return EdgePolicy::negate(condition);
-        }
+    if (then_branch == FALSE_NODE and else_branch == TRUE_NODE) {
+        return _negate(condition);
     }
 
     IteKey key(condition,then_branch,else_branch);
@@ -276,8 +216,4 @@ BasicRobddManager<EdgePolicy>::_ite(
     return result;
 }
 
-template class BasicRobddManager<RegularEdgePolicy>;
-template class BasicRobddManager<ComplementedEdgePolicy>;
-
-} // namespace Detail
 } // namespace Ariadne
