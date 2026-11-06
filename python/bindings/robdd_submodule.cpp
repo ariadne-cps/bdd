@@ -47,6 +47,23 @@ void robdd_submodule(pybind11::module& module) {
                 return manager.variable(variable);
             },
             pybind11::keep_alive<0,1>())
+        .def("top_variable",&RobddManager::top_variable)
+        .def("low",
+            [](RobddManager const& manager, Robdd const& value) {
+                return manager.low(value);
+            },
+            pybind11::keep_alive<0,1>())
+        .def("high",
+            [](RobddManager const& manager, Robdd const& value) {
+                return manager.high(value);
+            },
+            pybind11::keep_alive<0,1>())
+        .def("make_node",
+            [](RobddManager& manager, BddVariable variable,
+               Robdd const& low, Robdd const& high) {
+                return manager.make_node(variable,low,high);
+            },
+            pybind11::keep_alive<0,1>())
         .def("negation",
             [](RobddManager& manager, Robdd const& value) {
                 return manager.negation(value);

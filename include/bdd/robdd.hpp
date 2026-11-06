@@ -18,6 +18,7 @@
 
 #include <map>
 #include <mutex>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -68,6 +69,21 @@ class RobddManager {
 
     Robdd variable(SizeType index);
     Robdd variable(BddVariable variable);
+
+    //! \brief Return the root variable, or no value for a terminal.
+    std::optional<BddVariable> top_variable(Robdd const& value) const;
+
+    //! \brief Return the semantic low/high branch of a non-terminal ROBDD.
+    //! \details A complemented root complements both returned branches.
+    //! Passing a terminal is a precondition violation.
+    Robdd low(Robdd const& value) const;
+    Robdd high(Robdd const& value) const;
+
+    //! \brief Build a canonical decision node with the given semantic children.
+    //! \details Both children must belong to this manager and all their
+    //! variables must follow the supplied variable in the fixed ordering.
+    //! Equal children are reduced to their shared child.
+    Robdd make_node(BddVariable variable, Robdd const& low, Robdd const& high);
 
     Robdd negation(Robdd const& value);
     Robdd conjunction(Robdd const& lhs, Robdd const& rhs);

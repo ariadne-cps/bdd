@@ -30,7 +30,48 @@ Robdd RobddManager::variable(SizeType index) {
 }
 
 Robdd RobddManager::variable(BddVariable variable) {
+    ARIADNE_PRECONDITION_MSG(variable.index() < std::numeric_limits<SizeType>::max(),
+        "Maximum variable index is reserved for terminal ordering");
     return Robdd(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
+}
+
+std::optional<BddVariable> RobddManager::top_variable(Robdd const& value) const {
+    NodeRef root = _validate(value);
+    if (_is_terminal(root)) {
+        return std::nullopt;
+    }
+    return _node(root).variable;
+}
+
+Robdd RobddManager::low(Robdd const& value) const {
+    NodeRef root = _validate(value);
+    ARIADNE_PRECONDITION_MSG(not _is_terminal(root),
+        "Cannot inspect the low branch of a terminal ROBDD");
+    Node node = _node(root);
+    return Robdd(const_cast<RobddManager*>(this),
+        _is_complemented(root) ? _negate(node.low) : node.low);
+}
+
+Robdd RobddManager::high(Robdd const& value) const {
+    NodeRef root = _validate(value);
+    ARIADNE_PRECONDITION_MSG(not _is_terminal(root),
+        "Cannot inspect the high branch of a terminal ROBDD");
+    Node node = _node(root);
+    return Robdd(const_cast<RobddManager*>(this),
+        _is_complemented(root) ? _negate(node.high) : node.high);
+}
+
+Robdd RobddManager::make_node(
+        BddVariable variable, Robdd const& low, Robdd const& high) {
+    NodeRef low_ref = _validate(low);
+    NodeRef high_ref = _validate(high);
+    ARIADNE_PRECONDITION_MSG(variable.index() < std::numeric_limits<SizeType>::max(),
+        "Maximum variable index is reserved for terminal ordering");
+    ARIADNE_PRECONDITION_MSG(
+        variable.index() < _top_variable(low_ref) and
+        variable.index() < _top_variable(high_ref),
+        "ROBDD node variable must precede the variables of both children");
+    return Robdd(this,_make_node(variable,low_ref,high_ref));
 }
 
 Robdd RobddManager::negation(Robdd const& value) {

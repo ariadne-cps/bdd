@@ -152,52 +152,24 @@ Planned: bounded hash-based cache. Cache entries may eventually be lossy because
 
 ### Complemented edges
 
-Not implemented yet.
+Implemented on 2026-11-06, and now the only supported ROBDD edge representation.
+Every physical non-terminal node has a regular low reference; a semantic
+`NodeRef` carries a complement bit. Complementing a ROBDD is a constant-time
+bit toggle and does not allocate physical nodes. The public `Robdd` handle
+retains the semantic reference, while `RobddManager` owns canonical physical
+nodes and propagates incoming polarity to selected branches.
 
-Complemented edges are a planned optional representation policy rather than a mandatory property of every manager.
+The earlier optional regular-edge policy and its comparison benchmark have
+been retired following validation. The fixed-order paving use case must
+therefore use the same complemented representation, and performance needs
+evaluation on real structural traversal, cell enumeration and projection
+workloads rather than assuming that negation microbenchmarks predict paving
+performance.
 
-The main motivation is SAT/general-purpose symbolic work: representing `not f` by toggling a complement bit on a semantic node reference can make negation nearly free and allow a function and its complement to share the same physical nodes.
-
-The N-tree/grid-paving case is more nuanced. Traversal-heavy operations such as iteration, enabled-cell counting, subset/disjoint checks and geometric descent may execute very little work per visited node. Requiring every traversal step to propagate edge polarity can therefore introduce measurable overhead even if it is implemented with masking/XOR rather than a branch.
-
-Conversely, grid-set operations involving complement-like structure, especially difference/remove, may benefit from complemented edges through lower node counts and cheaper negation. This tradeoff must be measured rather than assumed.
-
-The intended design is therefore orthogonal policy selection:
-
-```text
-ordering policy:
-    fixed
-    reorderable
-
-edge policy:
-    regular
-    complemented
-```
-
-The initial expected configurations are:
-
-```text
-N-tree/grid-paving:
-    fixed ordering
-    regular edges initially
-
-SAT/general-purpose:
-    reorderable ordering optionally
-    complemented edges
-```
-
-N-tree benchmarks should later compare regular and complemented edges on representative operations before deciding whether complemented edges are worth enabling there.
-
-The implementation should distinguish physical node identity from semantic node reference:
-
-```text
-NodeId  = physical canonical node identity
-NodeRef = NodeId plus representation metadata such as a complement bit
-```
-
-This separation should be established before complemented edges are implemented. The public API already avoids exposing raw node identifiers, which leaves room for this change without altering user-facing handle semantics.
-
-As with ordering policy, the fixed/regular fast path should not repeatedly branch on whether complemented edges are enabled. Internal policy specialization or another zero/near-zero-overhead mechanism is preferred.
+Node identity and semantic node reference remain distinct. The public
+structural inspection API returns semantic children, not raw physical
+references. All public node construction must preserve the fixed ordering and
+canonical low-regular normalization.
 
 ### Garbage collection
 
@@ -392,17 +364,19 @@ The implementation should remain semantically specialized around ROBDD rather th
 
 Reusable infrastructure may be shared in the future, but ROBDD reduction, unique-table semantics and algorithms should remain explicit and optimizable.
 
-The current preferred feature progression is:
+The implementation progression, after complemented-edge integration, is:
 
 ```text
-ROBDD core
+ROBDD core + complemented edges               [implemented]
     |
-    +-- structural traversal
+    +-- exhaustive/random semantic tests       [implemented]
+    +-- structural inspection/construction     [implemented]
+    +-- support / shift / renaming             [next]
     +-- restriction / quantification / and_exists
-    +-- complemented edges
-    +-- fixed-order and reorderable manager policies
+    +-- N-tree compatibility and paving workloads
     +-- concurrent unique/computed tables
     +-- structured parallel recursion
+    +-- dynamic ordering (only if justified)
 ```
 
 Only after measurements on real SAT, AllSAT and grid-set workloads should an additional representation such as ZDD be considered.
@@ -969,3 +943,34 @@ Validation status:
   normalization used in the validated comparison;
 - full compile/test/sanitizer validation is delegated to CI for the updated
   branch.
+
+### 2026-11-06 - M0/M1: structural ROBDD API and semantic regression coverage
+
+Extended the complemented-edge ROBDD without introducing a second representation:
+
+- added `top_variable` (empty on terminals), `low`, `high` and
+  `make_node` to the public `RobddManager` API;
+- structural inspection returns semantic children, applying any root
+  complement polarity without allocating physical nodes;
+- terminal branch inspection, foreign-manager operands, and attempts to
+  construct nodes out of variable order are rejected;
+- reserved the maximum variable index as an internal terminal-order
+  sentinel, including in the variable constructor;
+- exposed the same structural operations in the Python bindings;
+- added exhaustive truth-table regression for all 256 Boolean functions
+  of three variables (Shannon expansion checked against independent DNF);
+- added a deterministic 160-step four-variable randomized formula workload,
+  comparing Boolean-operation truth tables against each ROBDD evaluation;
+- added structural round-trip, complemented-child, skipped-level and
+  precondition regressions in C++, with matching Python smoke cases.
+
+Invariants: the variable at a non-terminal root precedes the variables of
+either child, complemented branches preserve semantic polarity, and public
+node construction never bypasses reduction/canonicalization.
+
+Validation: API and test changes were inspected against the existing
+complemented-edge implementation; full C++/Python builds, tests and
+sanitizer runs must be confirmed by CI after the commit. The next increment
+is M2: support extraction, order-preserving variable shift and general
+simultaneous renaming, with semantic tests for skipped levels and invalid
+mappings.
