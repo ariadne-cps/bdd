@@ -59,6 +59,21 @@ class Robdd {
     friend class RobddManager;
 };
 
+//! \brief Snapshot of manager allocations, obtained under a single lock.
+//! \details Counts and ABI payload sizes are exact for their C++ containers.
+//! The total heap footprint is NOT reported: standard-library map node links,
+//! allocator overhead and any other runtime allocations are excluded.
+//! Nodes not reachable from a particular root remain in the manager.
+struct RobddManagerStatistics {
+    SizeType node_count;
+    SizeType node_capacity;
+    SizeType node_size_bytes;
+    SizeType unique_table_entries;
+    SizeType unique_table_entry_payload_bytes;
+    SizeType ite_cache_entries;
+    SizeType ite_cache_entry_payload_bytes;
+};
+
 //! \brief Manager owning canonical ROBDD nodes and the ITE computed table.
 //! \details Complemented edges are the single internal representation.
 //! Physical nodes are canonicalized with a regular low reference.
@@ -210,6 +225,11 @@ class RobddManager {
     //! including nodes that are not reachable from any particular root.
     //! It is not the size of a single ROBDD or a count of satisfying models.
     SizeType node_count() const;
+
+    //! \brief Snapshot node vector capacity, uniqueness table and ITE cache.
+    //! \details Safe to call concurrently with canonical node insertion.
+    //! Returned sizes exclude map bookkeeping and allocator overhead.
+    RobddManagerStatistics statistics() const;
 
   private:
     using NodeRef = Robdd::NodeRef;

@@ -454,6 +454,18 @@ SizeType RobddManager::node_count() const {
     return _nodes.size();
 }
 
+RobddManagerStatistics RobddManager::statistics() const {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return RobddManagerStatistics{
+        _nodes.size(),
+        _nodes.capacity(),
+        sizeof(Node),
+        _unique_table.size(),
+        sizeof(decltype(_unique_table)::value_type),
+        _ite_cache.size(),
+        sizeof(decltype(_ite_cache)::value_type)};
+}
+
 RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
         "ROBDD operands must belong to the same manager");

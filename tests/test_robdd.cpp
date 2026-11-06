@@ -750,6 +750,48 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_EXPECT_EXCEPTION(manager.evaluate(y,make_binary_word("0")));
     }
 
+    void test_manager_statistics() {
+        RobddManager manager;
+        auto empty=manager.statistics();
+        ARIADNE_TESTING_EXPECT_EQUAL(empty.node_count,0u);
+        ARIADNE_TESTING_EXPECT_EQUAL(empty.unique_table_entries,0u);
+        ARIADNE_TESTING_EXPECT_EQUAL(empty.ite_cache_entries,0u);
+        ARIADNE_TESTING_PROVE(empty.node_size_bytes!=0u);
+        ARIADNE_TESTING_PROVE(empty.unique_table_entry_payload_bytes!=0u);
+        ARIADNE_TESTING_PROVE(empty.ite_cache_entry_payload_bytes!=0u);
+
+        auto x=manager.variable(0u);
+        auto y=manager.variable(1u);
+        auto before=manager.statistics();
+        ARIADNE_TESTING_EXPECT_EQUAL(before.node_count,2u);
+        ARIADNE_TESTING_EXPECT_EQUAL(before.unique_table_entries,2u);
+        ARIADNE_TESTING_PROVE(before.node_capacity>=before.node_count);
+
+        auto xy=manager.conjunction(x,y);
+        ARIADNE_TESTING_PROVE(not xy.is_terminal());
+        auto during=manager.statistics();
+        ARIADNE_TESTING_PROVE(during.node_count>=before.node_count);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            during.unique_table_entries,during.node_count);
+        ARIADNE_TESTING_PROVE(during.node_capacity>=during.node_count);
+        ARIADNE_TESTING_PROVE(
+            during.ite_cache_entries>=before.ite_cache_entries);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.node_count(),during.node_count);
+
+        // Handles do not own manager nodes; their destruction cannot
+        // reclaim canonical table entries with the current manager design.
+        {
+            auto temporary=manager.exclusive_or(x,y);
+            ARIADNE_TESTING_PROVE(not temporary.is_terminal());
+        }
+        auto after=manager.statistics();
+        ARIADNE_TESTING_PROVE(after.node_count>=during.node_count);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            after.unique_table_entries,after.node_count);
+        ARIADNE_TESTING_PROVE(after.node_capacity>=after.node_count);
+    }
+
     void test_manager_separation() {
         RobddManager first;
         RobddManager second;
@@ -820,6 +862,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_exhaustive_three_variable_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_randomized_four_variable_formulas);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_statistics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
