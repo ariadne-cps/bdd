@@ -186,6 +186,132 @@ Robdd RobddManager::rename(
     return Robdd(this,rebuild(root));
 }
 
+Robdd RobddManager::restrict(
+        Robdd const& value, BddVariable variable, Bool assignment) {
+    NodeRef root = _validate(value);
+    ARIADNE_PRECONDITION_MSG(
+        variable.index() < std::numeric_limits<SizeType>::max(),
+        "Cannot restrict the reserved terminal-order variable index");
+
+    std::map<NodeRef,NodeRef> memo;
+    std::function<NodeRef(NodeRef)> walk = [&](NodeRef ref) -> NodeRef {
+        if (_is_terminal(ref) or _top_variable(ref) > variable.index()) {
+            return ref;
+        }
+        auto found = memo.find(ref);
+        if (found != memo.end()) {
+            return found->second;
+        }
+
+        SizeType top = _top_variable(ref);
+        auto branches = _cofactor(ref,top);
+        NodeRef result;
+        if (top == variable.index()) {
+            result = assignment ? branches.second : branches.first;
+        } else {
+            NodeRef low = walk(branches.first);
+            NodeRef high = walk(branches.second);
+            result = _make_node(BddVariable(top),low,high);
+        }
+        memo.emplace(ref,result);
+        return result;
+    };
+    return Robdd(this,walk(root));
+}
+
+Robdd RobddManager::exists(
+        Robdd const& value, std::vector<BddVariable> const& variables) {
+    NodeRef root = _validate(value);
+    constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
+    std::set<SizeType> quantified;
+    for (BddVariable variable : variables) {
+        ARIADNE_PRECONDITION_MSG(variable.index() < max_index,
+            "Cannot quantify the reserved terminal-order variable index");
+        quantified.insert(variable.index());
+    }
+    if (quantified.empty() or _is_terminal(root)) {
+        return Robdd(this,root);
+    }
+
+    // Existential quantification does not commute with complemented edges:
+    // exists(v, NOT f) is not generally NOT exists(v, f). Memoize semantic
+    // references rather than normalizing away their complement bit.
+    std::map<NodeRef,NodeRef> memo;
+    std::function<NodeRef(NodeRef)> walk = [&](NodeRef ref) -> NodeRef {
+        if (_is_terminal(ref)) {
+            return ref;
+        }
+        auto found = memo.find(ref);
+        if (found != memo.end()) {
+            return found->second;
+        }
+
+        SizeType top = _top_variable(ref);
+        auto branches = _cofactor(ref,top);
+        NodeRef low = walk(branches.first);
+        NodeRef high = walk(branches.second);
+        NodeRef result = quantified.count(top)
+            ? _ite(low,TRUE_NODE,high)
+            : _make_node(BddVariable(top),low,high);
+        memo.emplace(ref,result);
+        return result;
+    };
+    return Robdd(this,walk(root));
+}
+
+Robdd RobddManager::and_exists(
+        Robdd const& lhs, Robdd const& rhs,
+        std::vector<BddVariable> const& variables) {
+    NodeRef left = _validate(lhs);
+    NodeRef right = _validate(rhs);
+    constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
+    std::set<SizeType> quantified;
+    for (BddVariable variable : variables) {
+        ARIADNE_PRECONDITION_MSG(variable.index() < max_index,
+            "Cannot quantify the reserved terminal-order variable index");
+        quantified.insert(variable.index());
+    }
+    if (quantified.empty()) {
+        return Robdd(this,_ite(left,right,FALSE_NODE));
+    }
+
+    // Fused conjunction and existential abstraction. Each recursive call
+    // visits the next variable of either input, including variables skipped
+    // by one operand. Memoization is local to the quantification set.
+    using AndKey = std::pair<NodeRef,NodeRef>;
+    std::map<AndKey,NodeRef> memo;
+    std::function<NodeRef(NodeRef,NodeRef)> walk =
+        [&](NodeRef a, NodeRef b) -> NodeRef {
+            if (a == FALSE_NODE or b == FALSE_NODE or a == _negate(b)) {
+                return FALSE_NODE;
+            }
+            if (a == TRUE_NODE and b == TRUE_NODE) {
+                return TRUE_NODE;
+            }
+
+            if (a > b) {
+                std::swap(a,b);
+            }
+            AndKey key(a,b);
+            auto found = memo.find(key);
+            if (found != memo.end()) {
+                return found->second;
+            }
+
+            SizeType top = std::min(_top_variable(a),_top_variable(b));
+            auto a_branches = _cofactor(a,top);
+            auto b_branches = _cofactor(b,top);
+            NodeRef low = walk(a_branches.first,b_branches.first);
+            NodeRef high = walk(a_branches.second,b_branches.second);
+            NodeRef result = quantified.count(top)
+                ? _ite(low,TRUE_NODE,high)
+                : _make_node(BddVariable(top),low,high);
+            memo.emplace(key,result);
+            return result;
+        };
+    return Robdd(this,walk(left,right));
+}
+
 Robdd RobddManager::negation(Robdd const& value) {
     return Robdd(this,_negate(_validate(value)));
 }

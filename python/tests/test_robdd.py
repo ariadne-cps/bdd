@@ -91,3 +91,43 @@ def test_robdd_support_shift_rename():
     other = RobddManager()
     with pytest.raises(Exception):
         manager.rename(other.variable(1), {1: 3})
+
+def test_robdd_restrict_exists_and_exists():
+    import pytest
+    from pyariadne_bdd import BddVariable
+
+    manager = RobddManager()
+    x = manager.variable(0)
+    y = manager.variable(2)
+    z = manager.variable(4)
+    formula = manager.conjunction(x, manager.exclusive_or(y, z))
+    middle = BddVariable(2)
+
+    assert manager.restrict(formula, middle, True) == manager.conjunction(
+        x, manager.negation(z))
+    assert manager.restrict(formula, middle, False) == manager.conjunction(x, z)
+    assert manager.restrict(formula, BddVariable(1), True) == formula
+    assert manager.restrict(manager.constant(True), middle, False).is_true()
+
+    assert manager.exists(formula, [middle]) == x
+    assert manager.exists(formula, [middle, middle]) == x
+    assert manager.exists(formula, [BddVariable(1)]) == formula
+    assert manager.exists(formula, []) == formula
+
+    assert manager.exists(x, [BddVariable(0)]).is_true()
+    assert manager.exists(manager.negation(x), [BddVariable(0)]).is_true()
+
+    assert manager.and_exists(formula, manager.negation(y), [middle]) == (
+        manager.conjunction(x, z))
+    assert manager.and_exists(formula, manager.constant(True), [middle]) == x
+    assert manager.and_exists(formula, formula, [middle]) == x
+    assert manager.and_exists(formula, manager.negation(formula), [middle]).is_false()
+    assert manager.and_exists(formula, manager.constant(True), []) == formula
+
+    other = RobddManager()
+    with pytest.raises(Exception):
+        manager.restrict(other.variable(0), BddVariable(0), False)
+    with pytest.raises(Exception):
+        manager.exists(other.variable(0), [BddVariable(0)])
+    with pytest.raises(Exception):
+        manager.and_exists(formula, other.variable(0), [middle])

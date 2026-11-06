@@ -372,8 +372,8 @@ ROBDD core + complemented edges               [implemented]
     +-- exhaustive/random semantic tests       [implemented]
     +-- structural inspection/construction     [implemented]
     +-- support / shift / renaming             [implemented]
-    +-- restriction / quantification / and_exists [next]
-    +-- N-tree compatibility and paving workloads
+    +-- restriction / quantification / and_exists [implemented]
+    +-- N-tree level-aware traversal / paving workloads [next]
     +-- concurrent unique/computed tables
     +-- structured parallel recursion
     +-- dynamic ordering (only if justified)
@@ -1057,3 +1057,46 @@ Validation: the uploaded report proves the uncovered branch on the
 preceding commit. The new test and the resulting coverage are pending
 CI confirmation on this commit. M3 (restriction, existential
 quantification and `and_exists`) remains the next feature milestone.
+
+### 2026-11-06 - M3: restriction, existential quantification and fused and-exists
+
+Implemented three new `RobddManager` operations, each exposed through the
+same C++ and Python APIs:
+
+- `restrict(root, variable, assignment)` substitutes a Boolean constant
+  for one variable anywhere in the ordered DAG. It stops when the current
+  variable is greater than the requested one (absent variable) and selects
+  the semantic low/high cofactor when it reaches the variable. Ancestors
+  are rebuilt through the canonical node constructor.
+- `exists(root, variables)` abstracts a set of variables by disjoining the
+  two semantic cofactors at every quantified node. Quantified variables may
+  be absent or repeated. Memoization is keyed by the entire semantic
+  `NodeRef`, including its complement bit: existential quantification
+  does not commute with Boolean negation.
+- `and_exists(lhs, rhs, variables)` performs conjunction and existential
+  elimination in one memoized recursion over pairs of semantic references.
+  It splits at the earliest variable of either operand, thereby handling
+  skipped levels, and disjoins branches at quantified levels. The complete
+  intermediate conjunction is not constructed. Pair keys are normalized
+  because conjunction is commutative; the recursion uses terminal and
+  complementary-operand short circuits. With an empty quantification
+  set, the operation uses the existing ITE-based conjunction.
+- All three operations validate manager identity and reject the
+  maximum-`SizeType` terminal-order sentinel as a variable index.
+  Transformations preserve the existing complemented-edge normalization.
+
+Regression coverage includes missing/internal/root variables, both
+restriction values, complemented roots, terminal and duplicate/empty
+quantification, manager separation and invalid indices. An independent
+finite Boolean oracle checks all 256 truth tables on three variables:
+restriction for each variable and value, quantification for all eight
+variable subsets, and fused conjunction-plus-quantification against both
+`exists(conjunction(...))` and a truth-table oracle, with a second
+deterministic Boolean function for every truth table. Python smoke tests
+exercise representative cases and validation.
+
+Validation status: source review complete. C++ build/test, Python binding
+tests, sanitizer results and coverage must be confirmed by CI after
+committing this change. The next milestone is M4: depth-aware traversal
+and enabled-cell enumeration/counting for N-tree paving, especially for
+skipped BDD variables and terminal subtrees.

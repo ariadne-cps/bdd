@@ -319,6 +319,170 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_restrict_and_quantification_basics() {
+        RobddManager manager;
+        auto f = manager.constant(false);
+        auto t = manager.constant(true);
+        auto x = manager.variable(0u);
+        auto y = manager.variable(2u);
+        auto z = manager.variable(4u);
+        auto formula = manager.conjunction(x,manager.exclusive_or(y,z));
+
+        ARIADNE_TESTING_PROVE(manager.restrict(f,BddVariable(2u),true) == f);
+        ARIADNE_TESTING_PROVE(manager.restrict(t,BddVariable(2u),false) == t);
+        ARIADNE_TESTING_PROVE(manager.restrict(formula,BddVariable(5u),true) == formula);
+        ARIADNE_TESTING_PROVE(manager.restrict(formula,BddVariable(1u),false) == formula);
+        ARIADNE_TESTING_PROVE(manager.restrict(formula,BddVariable(0u),false).is_false());
+        ARIADNE_TESTING_PROVE(
+            manager.restrict(formula,BddVariable(2u),true)
+            == manager.conjunction(x,manager.negation(z)));
+        ARIADNE_TESTING_PROVE(
+            manager.restrict(formula,BddVariable(4u),true)
+            == manager.conjunction(x,manager.negation(y)));
+        ARIADNE_TESTING_PROVE(
+            manager.restrict(manager.negation(formula),BddVariable(2u),true)
+            == manager.negation(manager.restrict(formula,BddVariable(2u),true)));
+
+        ARIADNE_TESTING_PROVE(manager.exists(f,{BddVariable(2u)}) == f);
+        ARIADNE_TESTING_PROVE(manager.exists(t,{BddVariable(2u)}) == t);
+        ARIADNE_TESTING_PROVE(manager.exists(formula,{}) == formula);
+        ARIADNE_TESTING_PROVE(manager.exists(formula,{BddVariable(1u)}) == formula);
+        ARIADNE_TESTING_PROVE(manager.exists(formula,
+            {BddVariable(2u),BddVariable(2u)}) == x);
+        ARIADNE_TESTING_PROVE(manager.exists(formula,
+            {BddVariable(2u),BddVariable(4u)}) == x);
+        ARIADNE_TESTING_PROVE(manager.exists(formula,
+            {BddVariable(0u),BddVariable(2u),BddVariable(4u)}).is_true());
+
+        // Existential quantification does NOT commute with negation.
+        ARIADNE_TESTING_PROVE(
+            manager.exists(x,{BddVariable(0u)}).is_true());
+        ARIADNE_TESTING_PROVE(
+            manager.exists(manager.negation(x),{BddVariable(0u)}).is_true());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(x,manager.negation(x),{BddVariable(0u)}).is_false());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(x,t,{BddVariable(0u)}).is_true());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(t,x,{BddVariable(0u)}).is_true());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,t,{BddVariable(2u)}) == x);
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,manager.negation(y),{BddVariable(2u)})
+            == manager.conjunction(x,z));
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,t,{}) == formula);
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,formula,{BddVariable(2u)}) == x);
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,manager.negation(formula),
+                {BddVariable(0u),BddVariable(2u)}).is_false());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,f,{BddVariable(2u)}).is_false());
+        ARIADNE_TESTING_PROVE(
+            manager.and_exists(formula,formula,{BddVariable(1u)}) == formula);
+
+        SizeType sentinel = std::numeric_limits<SizeType>::max();
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.restrict(formula,BddVariable(sentinel),false));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.exists(formula,{BddVariable(sentinel)}));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.and_exists(formula,t,{BddVariable(sentinel)}));
+
+        RobddManager other;
+        auto foreign = other.variable(0u);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.restrict(foreign,BddVariable(0u),true));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.exists(foreign,{BddVariable(0u)}));
+        ARIADNE_TESTING_EXPECT_EXCEPTION(
+            manager.and_exists(formula,foreign,{BddVariable(0u)}));
+    }
+
+    void test_quantification_truth_tables() {
+        RobddManager manager;
+        std::array<Robdd,3> variables {
+            manager.variable(0u),manager.variable(1u),manager.variable(2u)
+        };
+        char const* const assignments[8] = {
+            "000","100","010","110","001","101","011","111"
+        };
+
+        std::vector<Robdd> functions;
+        functions.reserve(256u);
+        for (unsigned mask=0u; mask!=256u; ++mask) {
+            Robdd formula = manager.constant(false);
+            for (unsigned pattern=0u; pattern!=8u; ++pattern) {
+                if (((mask >> pattern) & 1u) == 0u) continue;
+                Robdd cube = manager.constant(true);
+                for (SizeType index=0u; index!=3u; ++index) {
+                    Robdd literal = ((pattern >> index) & 1u)
+                        ? variables[index] : manager.negation(variables[index]);
+                    cube = manager.conjunction(cube,literal);
+                }
+                formula = manager.disjunction(formula,cube);
+            }
+            functions.push_back(formula);
+        }
+
+        for (unsigned mask=0u; mask!=256u; ++mask) {
+            Robdd formula = functions[mask];
+
+            for (unsigned variable=0u; variable!=3u; ++variable) {
+                for (unsigned chosen=0u; chosen!=2u; ++chosen) {
+                    Robdd restricted = manager.restrict(
+                        formula,BddVariable(variable),chosen != 0u);
+                    for (unsigned assignment=0u; assignment!=8u; ++assignment) {
+                        unsigned forced = (assignment & ~(1u << variable))
+                            | (chosen << variable);
+                        ARIADNE_TESTING_EXPECT_EQUAL(
+                            manager.evaluate(restricted,
+                                make_binary_word(assignments[assignment])),
+                            ((mask >> forced) & 1u) != 0u);
+                    }
+                }
+            }
+
+            for (unsigned quant_mask=0u; quant_mask!=8u; ++quant_mask) {
+                std::vector<BddVariable> quantified;
+                for (unsigned index=0u; index!=3u; ++index) {
+                    if ((quant_mask & (1u << index)) != 0u) {
+                        quantified.emplace_back(index);
+                    }
+                }
+                Robdd projected = manager.exists(formula,quantified);
+                unsigned other_mask = (mask * 73u + 29u) & 255u;
+                Robdd fused = manager.and_exists(
+                    formula,functions[other_mask],quantified);
+                Robdd reference = manager.exists(
+                    manager.conjunction(formula,functions[other_mask]),quantified);
+                ARIADNE_TESTING_PROVE(fused == reference);
+                ARIADNE_TESTING_PROVE(
+                    manager.and_exists(functions[other_mask],formula,quantified) == fused);
+
+                for (unsigned assignment=0u; assignment!=8u; ++assignment) {
+                    Bool expected_projected = false;
+                    Bool expected_fused = false;
+                    for (unsigned candidate=0u; candidate!=8u; ++candidate) {
+                        if (((candidate ^ assignment) & ~quant_mask) != 0u) continue;
+                        expected_projected = expected_projected
+                            or (((mask >> candidate) & 1u) != 0u);
+                        expected_fused = expected_fused
+                            or (((mask >> candidate) & 1u) != 0u
+                                and ((other_mask >> candidate) & 1u) != 0u);
+                    }
+                    ARIADNE_TESTING_EXPECT_EQUAL(
+                        manager.evaluate(projected,make_binary_word(assignments[assignment])),
+                        expected_projected);
+                    ARIADNE_TESTING_EXPECT_EQUAL(
+                        manager.evaluate(fused,make_binary_word(assignments[assignment])),
+                        expected_fused);
+                }
+            }
+        }
+    }
+
     void test_exhaustive_three_variable_truth_tables() {
         RobddManager manager;
         std::array<Robdd,3> variables {
@@ -499,6 +663,8 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_shift);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_rename);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_rename_truth_tables);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_restrict_and_quantification_basics);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_quantification_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_exhaustive_three_variable_truth_tables);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_randomized_four_variable_formulas);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_evaluation);

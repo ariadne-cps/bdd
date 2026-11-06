@@ -102,6 +102,21 @@ class RobddManager {
     //! target indices must not equal the reserved terminal-order sentinel.
     Robdd rename(Robdd const& value, std::map<SizeType,SizeType> const& indices);
 
+    //! \brief Restrict a variable to a Boolean value, even below the root.
+    //! \details Variables not in the support leave the function unchanged.
+    Robdd restrict(Robdd const& value, BddVariable variable, Bool assignment);
+
+    //! \brief Existentially quantify the specified variables.
+    //! \details Duplicate/absent variables are allowed. A complemented
+    //! reference is interpreted semantically, not by negating its quantified result.
+    Robdd exists(Robdd const& value, std::vector<BddVariable> const& variables);
+
+    //! \brief Compute exists(variables, lhs AND rhs) in one recursive traversal.
+    //! \details Does not construct the full intermediate conjunction.
+    Robdd and_exists(
+        Robdd const& lhs, Robdd const& rhs,
+        std::vector<BddVariable> const& variables);
+
     Robdd negation(Robdd const& value);
     Robdd conjunction(Robdd const& lhs, Robdd const& rhs);
     Robdd disjunction(Robdd const& lhs, Robdd const& rhs);

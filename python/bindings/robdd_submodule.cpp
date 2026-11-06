@@ -76,6 +76,24 @@ void robdd_submodule(pybind11::module& module) {
                 return manager.rename(value,indices);
             },
             pybind11::keep_alive<0,1>())
+        .def("restrict",
+            [](RobddManager& manager, Robdd const& value,
+               BddVariable variable, Bool assignment) {
+                return manager.restrict(value,variable,assignment);
+            },
+            pybind11::keep_alive<0,1>())
+        .def("exists",
+            [](RobddManager& manager, Robdd const& value,
+               std::vector<BddVariable> const& variables) {
+                return manager.exists(value,variables);
+            },
+            pybind11::keep_alive<0,1>())
+        .def("and_exists",
+            [](RobddManager& manager, Robdd const& lhs, Robdd const& rhs,
+               std::vector<BddVariable> const& variables) {
+                return manager.and_exists(lhs,rhs,variables);
+            },
+            pybind11::keep_alive<0,1>())
         .def("negation",
             [](RobddManager& manager, Robdd const& value) {
                 return manager.negation(value);
