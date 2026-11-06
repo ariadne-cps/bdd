@@ -34,43 +34,53 @@ Robdd RobddManager::variable(BddVariable variable) {
 }
 
 Robdd RobddManager::negation(Robdd const& value) {
-    NodeId root = _validate(value);
-    return Robdd(this,_ite(root,FALSE_NODE,TRUE_NODE));
+    return Robdd(this,_negate(_validate(value)));
 }
 
 Robdd RobddManager::conjunction(Robdd const& lhs, Robdd const& rhs) {
-    NodeId l = _validate(lhs);
-    NodeId r = _validate(rhs);
+    NodeRef l = _validate(lhs);
+    NodeRef r = _validate(rhs);
     return Robdd(this,_ite(l,r,FALSE_NODE));
 }
 
 Robdd RobddManager::disjunction(Robdd const& lhs, Robdd const& rhs) {
-    NodeId l = _validate(lhs);
-    NodeId r = _validate(rhs);
+    NodeRef l = _validate(lhs);
+    NodeRef r = _validate(rhs);
     return Robdd(this,_ite(l,TRUE_NODE,r));
 }
 
 Robdd RobddManager::exclusive_or(Robdd const& lhs, Robdd const& rhs) {
-    NodeId l = _validate(lhs);
-    NodeId r = _validate(rhs);
-    NodeId not_r = _ite(r,FALSE_NODE,TRUE_NODE);
-    return Robdd(this,_ite(l,not_r,r));
+    NodeRef l = _validate(lhs);
+    NodeRef r = _validate(rhs);
+    return Robdd(this,_ite(l,_negate(r),r));
 }
 
-Robdd RobddManager::ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch) {
-    NodeId c = _validate(condition);
-    NodeId t = _validate(then_branch);
-    NodeId e = _validate(else_branch);
+Robdd RobddManager::ite(
+        Robdd const& condition,
+        Robdd const& then_branch,
+        Robdd const& else_branch)
+{
+    NodeRef c = _validate(condition);
+    NodeRef t = _validate(then_branch);
+    NodeRef e = _validate(else_branch);
     return Robdd(this,_ite(c,t,e));
 }
 
-Bool RobddManager::evaluate(Robdd const& value, BinaryWord const& assignment) const {
-    NodeId current = _validate(value);
-    while (current != FALSE_NODE and current != TRUE_NODE) {
+Bool RobddManager::evaluate(
+        Robdd const& value,
+        BinaryWord const& assignment) const
+{
+    NodeRef current = _validate(value);
+    while (not _is_terminal(current)) {
         Node node = _node(current);
         ARIADNE_PRECONDITION_MSG(node.variable.index() < assignment.size(),
             "Missing assignment for BDD variable " << node.variable.index());
-        current = assignment[node.variable.index()] ? node.high : node.low;
+
+        NodeRef next = assignment[node.variable.index()] ? node.high : node.low;
+        if (_is_complemented(current)) {
+            next = _negate(next);
+        }
+        current = next;
     }
     return current == TRUE_NODE;
 }
@@ -80,59 +90,81 @@ SizeType RobddManager::node_count() const {
     return _nodes.size();
 }
 
-RobddManager::NodeId RobddManager::_validate(Robdd const& value) const {
+RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
         "ROBDD operands must belong to the same manager");
     return value._root;
 }
 
-RobddManager::Node RobddManager::_node(NodeId id) const {
+RobddManager::Node RobddManager::_node(NodeRef ref) const {
     std::lock_guard<std::mutex> lock(_mutex);
-    SizeType index = id - 2u;
-    return _nodes[index];
+    return _nodes[_node_index(ref)];
 }
 
-SizeType RobddManager::_top_variable(NodeId id) const {
-    if (id == FALSE_NODE or id == TRUE_NODE) {
+SizeType RobddManager::_top_variable(NodeRef ref) const {
+    if (_is_terminal(ref)) {
         return std::numeric_limits<SizeType>::max();
     }
-    return _node(id).variable.index();
+    return _node(ref).variable.index();
 }
 
-std::pair<RobddManager::NodeId,RobddManager::NodeId>
-RobddManager::_cofactor(NodeId id, SizeType variable) const {
-    if (id == FALSE_NODE or id == TRUE_NODE) {
-        return {id,id};
+std::pair<RobddManager::NodeRef,RobddManager::NodeRef>
+RobddManager::_cofactor(NodeRef ref, SizeType variable) const {
+    if (_is_terminal(ref)) {
+        return {ref,ref};
     }
-    Node node = _node(id);
-    if (node.variable.index() == variable) {
-        return {node.low,node.high};
+
+    Node node = _node(ref);
+    if (node.variable.index() != variable) {
+        return {ref,ref};
     }
-    return {id,id};
+
+    NodeRef low = node.low;
+    NodeRef high = node.high;
+    if (_is_complemented(ref)) {
+        low = _negate(low);
+        high = _negate(high);
+    }
+    return {low,high};
 }
 
-RobddManager::NodeId
-RobddManager::_make_node(BddVariable variable, NodeId low, NodeId high) {
+RobddManager::NodeRef
+RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
     if (low == high) {
         return low;
     }
 
-    NodeKey key(variable.index(),low,high);
-    std::lock_guard<std::mutex> lock(_mutex);
-
-    auto found = _unique_table.find(key);
-    if (found != _unique_table.end()) {
-        return found->second;
+    // Canonical complemented-edge normalization: every physical node has a
+    // regular low reference. If low is complemented, complement both children
+    // and carry the complement on the reference returned to the caller.
+    Bool complement_result = false;
+    if (_is_complemented(low)) {
+        low = _negate(low);
+        high = _negate(high);
+        complement_result = true;
     }
 
-    NodeId id = _nodes.size() + 2u;
-    _nodes.push_back(Node{variable,low,high});
-    _unique_table.emplace(key,id);
-    return id;
+    NodeKey key(variable.index(),low,high);
+    NodeRef result;
+
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        auto found = _unique_table.find(key);
+        if (found != _unique_table.end()) {
+            result = found->second;
+        } else {
+            result = _make_regular_node_ref(_nodes.size());
+            _nodes.push_back(Node{variable,low,high});
+            _unique_table.emplace(key,result);
+        }
+    }
+
+    return complement_result ? _negate(result) : result;
 }
 
-RobddManager::NodeId
-RobddManager::_ite(NodeId condition, NodeId then_branch, NodeId else_branch) {
+RobddManager::NodeRef
+RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) {
     if (condition == TRUE_NODE) {
         return then_branch;
     }
@@ -144,6 +176,9 @@ RobddManager::_ite(NodeId condition, NodeId then_branch, NodeId else_branch) {
     }
     if (then_branch == TRUE_NODE and else_branch == FALSE_NODE) {
         return condition;
+    }
+    if (then_branch == FALSE_NODE and else_branch == TRUE_NODE) {
+        return _negate(condition);
     }
 
     IteKey key(condition,then_branch,else_branch);
@@ -163,16 +198,16 @@ RobddManager::_ite(NodeId condition, NodeId then_branch, NodeId else_branch) {
     auto then_cofactors = _cofactor(then_branch,variable);
     auto else_cofactors = _cofactor(else_branch,variable);
 
-    NodeId low = _ite(
+    NodeRef low = _ite(
         condition_cofactors.first,
         then_cofactors.first,
         else_cofactors.first);
-    NodeId high = _ite(
+    NodeRef high = _ite(
         condition_cofactors.second,
         then_cofactors.second,
         else_cofactors.second);
 
-    NodeId result = _make_node(BddVariable(variable),low,high);
+    NodeRef result = _make_node(BddVariable(variable),low,high);
 
     {
         std::lock_guard<std::mutex> lock(_mutex);

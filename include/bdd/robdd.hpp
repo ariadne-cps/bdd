@@ -31,7 +31,8 @@ namespace Ariadne {
 class RobddManager;
 
 //! \brief Lightweight handle to a reduced ordered binary decision diagram.
-//! \details The owning RobddManager must outlive every Robdd handle created by it.
+//! \details The root is a semantic node reference whose low bit records
+//! complement polarity. The owning manager must outlive every handle.
 class Robdd {
   public:
     Bool is_false() const { return _root == 0u; }
@@ -44,73 +45,74 @@ class Robdd {
     friend Bool operator!=(Robdd const& lhs, Robdd const& rhs) { return not (lhs == rhs); }
 
   private:
-    using NodeId = SizeType;
+    using NodeRef = SizeType;
 
-    Robdd(RobddManager* manager, NodeId root) : _manager(manager), _root(root) { }
+    Robdd(RobddManager* manager, NodeRef root) : _manager(manager), _root(root) { }
 
     RobddManager* _manager;
-    NodeId _root;
+    NodeRef _root;
 
     friend class RobddManager;
 };
 
-//! \brief Manager owning the canonical nodes and computed table of ROBDDs.
-//! \details The current implementation uses a single mutex as a deliberately
-//! simple thread-safe baseline. The data structures will be sharded later.
+//! \brief Manager owning canonical ROBDD nodes and the ITE computed table.
+//! \details Complemented edges are the single internal representation.
+//! Physical nodes are canonicalized with a regular low reference.
 class RobddManager {
   public:
     RobddManager() = default;
     RobddManager(RobddManager const&) = delete;
     RobddManager& operator=(RobddManager const&) = delete;
 
-    //! \brief Return the Boolean constant.
     Robdd constant(Bool value);
 
-    //! \brief Return the ROBDD for the variable with the given identity.
     Robdd variable(SizeType index);
     Robdd variable(BddVariable variable);
 
-    //! \brief Boolean operations.
     Robdd negation(Robdd const& value);
     Robdd conjunction(Robdd const& lhs, Robdd const& rhs);
     Robdd disjunction(Robdd const& lhs, Robdd const& rhs);
     Robdd exclusive_or(Robdd const& lhs, Robdd const& rhs);
     Robdd ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch);
 
-    //! \brief Evaluate an ROBDD under a total assignment.
-    //! \details assignment[i] is the truth value of variable i.
     Bool evaluate(Robdd const& value, BinaryWord const& assignment) const;
 
-    //! \brief Number of unique non-terminal nodes currently owned by the manager.
+    //! \brief Number of unique physical non-terminal nodes owned by the manager.
     SizeType node_count() const;
 
   private:
-    using NodeId = Robdd::NodeId;
-    using NodeKey = std::tuple<SizeType,NodeId,NodeId>;
-    using IteKey = std::tuple<NodeId,NodeId,NodeId>;
+    using NodeRef = Robdd::NodeRef;
+    using NodeKey = std::tuple<SizeType,NodeRef,NodeRef>;
+    using IteKey = std::tuple<NodeRef,NodeRef,NodeRef>;
 
     struct Node {
         BddVariable variable;
-        NodeId low;
-        NodeId high;
+        NodeRef low;
+        NodeRef high;
     };
 
-    static constexpr NodeId FALSE_NODE = 0u;
-    static constexpr NodeId TRUE_NODE = 1u;
+    static constexpr NodeRef FALSE_NODE = 0u;
+    static constexpr NodeRef TRUE_NODE = 1u;
 
-    NodeId _validate(Robdd const& value) const;
-    Node _node(NodeId id) const;
-    SizeType _top_variable(NodeId id) const;
-    std::pair<NodeId,NodeId> _cofactor(NodeId id, SizeType variable) const;
+    static Bool _is_terminal(NodeRef ref) { return ref <= TRUE_NODE; }
+    static Bool _is_complemented(NodeRef ref) { return (ref & 1u) != 0u; }
+    static NodeRef _negate(NodeRef ref) { return ref ^ 1u; }
+    static SizeType _node_index(NodeRef ref) { return (ref >> 1u) - 1u; }
+    static NodeRef _make_regular_node_ref(SizeType index) { return (index + 1u) << 1u; }
 
-    NodeId _make_node(BddVariable variable, NodeId low, NodeId high);
-    NodeId _ite(NodeId condition, NodeId then_branch, NodeId else_branch);
+    NodeRef _validate(Robdd const& value) const;
+    Node _node(NodeRef ref) const;
+    SizeType _top_variable(NodeRef ref) const;
+    std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;
+
+    NodeRef _make_node(BddVariable variable, NodeRef low, NodeRef high);
+    NodeRef _ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch);
 
   private:
     mutable std::mutex _mutex;
     std::vector<Node> _nodes;
-    std::map<NodeKey,NodeId> _unique_table;
-    std::map<IteKey,NodeId> _ite_cache;
+    std::map<NodeKey,NodeRef> _unique_table;
+    std::map<IteKey,NodeRef> _ite_cache;
 };
 
 } // namespace Ariadne
