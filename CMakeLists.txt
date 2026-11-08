@@ -20,10 +20,10 @@ if(NOT TARGET ariadne-build)
 endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    # Child commits are internally consistent; check direct occurrences.
-    # Cross-branch consistency checks remain explicit where needed.
+    # Check only production dependencies: Testing and Benchmarking are
+    # independent development-only gitlinks.
     require_same_dependency_commit(Build CHAINS
-        "build" "threading|build" "testing|build")
+        "build" "threading|build")
 endif()
 
 setup_project()
@@ -54,7 +54,7 @@ setup_project_library(
     LINK_LIBRARIES bdd
 )
 
-setup_standalone_project_tests(
+setup_standalone_project(
     TARGET ariadne-bdd
     TEST_DIRECTORY tests
     TEST_TARGET tests

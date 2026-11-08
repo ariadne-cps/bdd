@@ -13,23 +13,23 @@
  *  (at your option) any later version.
  */
 
-#include <sstream>
+#include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
-#include "logging/logging.hpp"
-#include "threading/threading_command_line_interface.hpp"
-#include "threading/thread_manager.hpp"
-#include "utility/stopwatch.hpp"
+#include "ariadne-benchmarking.hpp"
 #include "bdd/robdd.hpp"
 
 using namespace Ariadne;
+namespace Bench=Ariadne::Benchmarking;
 
 namespace {
 
 struct BenchmarkResult {
     SizeType n;
-    double elapsed_ms;
+    Bench::Statistics timing;
     SizeType allocated_nodes;
 };
 
@@ -114,72 +114,92 @@ Robdd build_nqueens(RobddManager& manager, SizeType n) {
     return solution;
 }
 
-BenchmarkResult run_nqueens(SizeType n) {
-    LOGGING_PRINTLN_AT(1,
-        "N-Queens benchmark start: n="<<n)
+// A measured sample builds one complete formula with a fresh manager.
+// The manager is constructed outside timing, and satisfiability and
+// allocation consistency are validated outside timing, even for warm-ups.
+BenchmarkResult run_nqueens(SizeType n, unsigned samples,
+                            Bench::Runner const& runner) {
+    std::unique_ptr<RobddManager> manager;
+    std::optional<Robdd> solution;
+    std::optional<SizeType> expected_nodes;
 
-    RobddManager manager;
-    Stopwatch<Microseconds> stopwatch;
+    Bench::Samples const elapsed=runner.run(
+        "nqueens/"+std::to_string(n),samples,
+        [&] {
+            solution.reset();  // Drop the old handle before its manager.
+            manager=std::make_unique<RobddManager>();
+        },
+        [&] {
+            solution.emplace(build_nqueens(*manager,n));
+            Bench::keep_alive(*solution);
+        },
+        [&] {
+            if(not solution || solution->is_false())
+                throw std::runtime_error(
+                    "Unexpected N-Queens UNSAT result for n="+std::to_string(n));
+            SizeType const allocated=manager->node_count();
+            if(expected_nodes && *expected_nodes!=allocated)
+                throw std::runtime_error(
+                    "Inconsistent ROBDD node count for n="+std::to_string(n));
+            expected_nodes=allocated;
+        });
 
-    const Robdd solution=build_nqueens(manager,n);
-
-    stopwatch.click();
-
-    if(solution.is_false()) {
-        LOGGING_PRINTLN(
-            "N-Queens benchmark unexpectedly returned UNSAT for n="<<n)
-        throw std::runtime_error("Unexpected N-Queens UNSAT result.");
-    }
-
-    const double elapsed_ms=
-        static_cast<double>(stopwatch.duration().count())/1000.0;
-
-    const SizeType allocated_nodes=manager.node_count();
-
-    LOGGING_PRINTLN_AT(1,
-        "N-Queens benchmark result: n="<<n
-        <<", time="<<elapsed_ms<<" ms"
-        <<", allocated_nodes="<<allocated_nodes)
-
-    return {n,elapsed_ms,allocated_nodes};
+    if(not expected_nodes)
+        throw std::runtime_error("N-Queens benchmark did not run");
+    return {n,Bench::summarize(elapsed),*expected_nodes};
 }
 
-Void print_results(std::vector<BenchmarkResult> const& results) {
-    std::ostringstream table;
-    table
-        <<"ROBDD N-Queens benchmark\n"
-        <<"n\ttime_ms\tallocated_nodes\n";
+void print_results(std::vector<BenchmarkResult> const& results,
+                   Bench::CommandLine const& cli) {
+    Bench::Report report("ROBDD N-Queens benchmark",cli.summary_fields());
+    report.set_parameter_header(
+        "One fresh manager per sample; times in nanoseconds per complete "
+        "N-Queens construction; median shown separately in milliseconds.");
+    report.set_dimension_columns({
+        {"N",0u,Bench::TableAlignment::Right},
+        {"Median (ms)",0u,Bench::TableAlignment::Right},
+        {"Allocated nodes",0u,Bench::TableAlignment::Right}
+    });
+    report.set_table_options(Bench::TableOptions::ruled());
 
-    for(auto const& result : results) {
-        table
-            <<result.n<<"\t"
-            <<result.elapsed_ms<<"\t"
-            <<result.allocated_nodes<<"\n";
+    for(auto const& result:results) {
+        report.add_row({
+            std::to_string(result.n),
+            Bench::Table::number(result.timing.median/1e6),
+            std::to_string(result.allocated_nodes)
+        },result.timing);
     }
-
-    LOGGING_PRINTLN(table.str())
+    report.print();
 }
 
 } // namespace
 
-Int main(Int argc, const char* argv[]) {
-    Logger::instance().configuration().set_verbosity(1u);
+int main(int argc,char const* argv[]) {
+    try {
+        unsigned samples=1u;  // Preserve the original single measured run.
+        Bench::CommandLine cli;
+        cli.add(CommandLineContribution("robdd-nqueens-benchmark", {
+            make_valued_argument_parser(
+                "", "samples",
+                "Number of measured N-Queens constructions per N (default: 1)",
+                [&samples](String const& text)->VoidFunction {
+                    unsigned const count=Bench::parse_unsigned<unsigned>(text);
+                    if(count==0u)
+                        throw std::invalid_argument("samples must be positive");
+                    return [&samples,count] { samples=count; };
+                })
+        }));
+        if(not cli.acquire(argc,argv)) return 0;
 
-    // The threading CLI includes logging options and attaches the thread
-    // registry before acquiring scheduler and concurrency settings.
-    ThreadingCommandLineInterface command_line;
-
-    if (not command_line.acquire(argc,argv)) {
+        Bench::Runner runner(cli,3u);
+        std::vector<BenchmarkResult> results;
+        results.reserve(3u);
+        for(SizeType n=5u;n<=7u;++n)
+            results.push_back(run_nqueens(n,samples,runner));
+        print_results(results,cli);
         return 0;
+    } catch(std::exception const& error) {
+        LOGGING_PRINTLN("benchmark_robdd_nqueens: "<<error.what())
+        return 1;
     }
-
-    std::vector<BenchmarkResult> results;
-    results.reserve(3u);
-
-    for(SizeType n=5u; n<=7u; ++n) {
-        results.push_back(run_nqueens(n));
-    }
-
-    print_results(results);
-    return 0;
 }

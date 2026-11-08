@@ -66,9 +66,20 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_CXX_COMPILER_LAUNCHER="$SCCACHE_LAUNCHER" -G Ninja -DWARNINGS_AS_ERRORS=ON -DPYTHON_ENFORCE_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
-    - name: Build
+    - name: Build Release library and bindings
+      if: matrix.build_type == 'Release'
       working-directory: ${{ runner.workspace }}/build
-      run: cmake --build . --parallel $NPROC --target everything
+      run: cmake --build . --parallel $NPROC --target ariadne-bdd bindings
+
+    - name: Build Release benchmarks
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --build . --parallel $NPROC --target benchmarks
+
+    - name: Build Debug tests and bindings
+      if: matrix.build_type == 'Debug'
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --build . --parallel $NPROC --target tests bindings
 
     - name: Test C++
       if: matrix.build_type == 'Debug'
