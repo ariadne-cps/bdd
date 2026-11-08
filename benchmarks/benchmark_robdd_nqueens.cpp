@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "threading/threading_command_line_interface.hpp"
 #include "ariadne-benchmarking.hpp"
 #include "bdd/robdd.hpp"
 
@@ -178,6 +179,8 @@ int main(int argc,char const* argv[]) {
     try {
         unsigned samples=1u;  // Preserve the original single measured run.
         Bench::CommandLine cli;
+        ThreadManager::instance();
+        cli.add(threading_command_line_contribution());
         cli.add(CommandLineContribution("robdd-nqueens-benchmark", {
             make_valued_argument_parser(
                 "", "samples",
