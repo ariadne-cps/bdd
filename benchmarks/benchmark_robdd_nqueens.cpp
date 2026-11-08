@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "threading/thread_manager.hpp"
 #include "threading/threading_command_line_interface.hpp"
 #include "ariadne-benchmarking.hpp"
 #include "bdd/robdd.hpp"
