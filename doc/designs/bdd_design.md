@@ -1286,3 +1286,67 @@ bits 8/10/12, concurrency 0/1/2/4/8, 7 samples.
 All performance runs remain manual; only build/tests are allowed
 in CI. This is a hypothesis awaiting reproducible measurements,
 not a proven acceleration.
+
+
+### 2026-11-09 - Measured bounded parallel ITE: large regression, no promotion
+
+**Operator-supplied manual Release results** from
+`benchmark_robdd_parallel_ite --bits 8,10,12
+--concurrency 0,1,2,4,8 --samples 7`. The benchmark uses a
+fresh manager for each timed ITE, with prepared input formulas and
+initially cold ITE cache; the independent exhaustive Boolean oracle
+and sequential canonical comparison run outside timing. Every
+sample completed its correctness check. Manager node counts after
+ITE were the same for serial and parallel at each bit width.
+
+| Bits | Concurrency | Serial median ms | Parallel median ms | Parallel/serial time |
+| --- | ---: | ---: | ---: | ---: |
+| 8 | 0 | 0.052209 | 0.045459 | 0.871x |
+| 8 | 1 | 0.042042 | 0.036541 | 0.869x |
+| 8 | 2 | 0.036959 | 0.225584 | **6.10x** |
+| 8 | 4 | 0.035208 | 0.204708 | **5.81x** |
+| 8 | 8 | 0.030291 | 0.175917 | **5.81x** |
+| 10 | 0 | 0.139584 | 0.131166 | 0.940x |
+| 10 | 1 | 0.137500 | 0.116125 | 0.844x |
+| 10 | 2 | 0.114125 | 0.822542 | **7.21x** |
+| 10 | 4 | 0.102834 | 0.469750 | **4.57x** |
+| 10 | 8 | 0.096291 | 0.515625 | **5.35x** |
+| 12 | 0 | 0.453625 | 0.418833 | 0.923x |
+| 12 | 1 | 0.415625 | 0.385583 | 0.928x |
+| 12 | 2 | 0.378208 | 2.502667 | **6.62x** |
+| 12 | 4 | 0.368000 | 1.448125 | **3.94x** |
+| 12 | 8 | 0.372083 | 1.451000 | **3.90x** |
+
+These are the reported medians, not a new run or a statistical
+test. The paired parallel/serial time ratio of 3.9-7.2x at
+concurrency >=2 makes the first internal parallelization
+experiment conclusively unattractive on the measured workload
+sizes. The manager allocated 196, 628 and 2137 physical nodes
+for bits 8, 10 and 12, respectively, identically for both methods.
+
+**Interpretation:** `ite_parallel()` with concurrency 0 and 1
+executes precisely `_ite` (the same implementation as `ite()`).
+The apparent 6-18% speedups therefore cannot be algorithmic:
+measurement order (serial is always measured first), warmup,
+hardware frequency, cache effects and noise are possible biases.
+In contrast, with >=2 worker threads, the forked branches operate
+on the *same canonical manager*, where per-node reads, the ITE
+cache and unique table are protected by one mutex. Two recursive
+branches may also compute overlapping ITE keys before a shared
+cache entry is published. Mutex contention, task scheduling and
+duplicate work are plausible causes, **not separately quantified**.
+
+**Decision:** retain `ite()` as production-default; treat the
+explicit `ite_parallel()` as experimental and do not recommend
+it for 8-12-bit Boolean truth tables. Do **not** add a magic
+forking threshold based on these results or infer that a
+larger variable count will produce a speedup. Any further
+parallel ITE attempt should first include instrumentation to
+separate contention/lock waiting, scheduler time and duplicate
+cache misses (and correct the serial-first measurement bias).
+Possible redesigns include less centralized read access and
+an in-progress computation cache, both of which require careful
+proofs of canonicality, deadlock freedom and task ownership.
+
+No performance benchmark is executed in CI, and no CI workflow
+is changed in this documentation-only update.

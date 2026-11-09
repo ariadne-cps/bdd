@@ -91,7 +91,14 @@ ThreadManager and up to two fork levels for independent ITE cofactor
 computations. It shares the existing mutex-protected canonical
 unique table and ITE cache; it does **not** use a second pool.
 `ite()` remains the production-default sequential implementation.
-No performance speedup is assumed.
+**The first manual measurement found a severe regression**, not an acceleration:
+at 8/10/12 variables with concurrency 2, 4 or 8, parallel ITE took
+approximately 3.9–7.2 times the matched sequential duration. The
+`ite_parallel()` API is **experimental and not recommended for these
+workloads**. Leave the ordinary `ite()` implementation as the default.
+Contended manager tables, task overhead, and duplicated concurrent
+cache misses are possible explanations; the benchmark does not
+attribute the slowdown to any one of them. No performance speedup is assumed.
 
 The standalone `benchmark_robdd_parallel_ite` executable uses
 Ariadne Benchmarking (`Parameter`, `Matrix`, `Runner`, `Report`)
