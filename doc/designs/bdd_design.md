@@ -1238,3 +1238,51 @@ build/test and updated coverage for this new regression await GitHub CI.
 The LCOV summary reports more branch entries than the available
 `BRDA` records; no other specific uncovered branch can be identified
 from this report alone.
+
+
+### 2026-11-09 - Opt-in internal parallel ITE and cold-cache benchmark
+
+**Motivation:** the parallel recombination experiment in the
+separate Tree module showed material speedup on sufficiently large
+independent subtrees, but recursive BDD computations share a canonical
+DAG and are not ownership-disjoint. The ROBDD manager's mutex
+already protects node vector reads/insertion, the unique table and
+the ITE cache individually, and is **not** held over recursion.
+This makes a bounded internal fork/join pilot possible but does not
+guarantee useful speedup: interning and cache contention might
+dominate.
+
+**Algorithm:** add explicit `RobddManager::ite_parallel(c,t,e)`,
+preserving existing `ite(c,t,e)` as-is. After the identical trivial
+and computed-cache checks, a nontrivial ITE splits into low/high
+cofactors; one is forked onto a `TaskGroup<ThreadManager>`, the caller
+computes the other, and joining completes before interning the parent.
+The recursion budget is fixed at two fork levels, with ordinary
+`_ite` recursion below that depth; concurrency <2 uses the
+unchanged serial method. All nodes remain canonical and manager
+owned. The manager's current coarse mutex is used unchanged; no
+additional scheduler or new independent manager is introduced.
+TaskGroup joins tasks even on exceptional unwinding. As with existing
+manager operations, caller must keep manager and global scheduler
+alive and avoid resizing the shared pool during the operation.
+
+**Correctness:** the new regression constructs deterministic
+seven-variable Boolean truth tables and tests 0,1,2,4,8 worker
+settings (bounded by available hardware), exact canonical identity,
+all assignments, complemented conditions and rejection of
+foreign-manager handles. The test restores the prior runtime
+configuration.
+
+**Performance experiment:** `benchmark_robdd_parallel_ite` uses
+the existing standalone Benchmarking framework and its typed
+`bits` and `concurrency` matrix. At each combination it times
+one ITE on fresh-manager, independently prepared deterministic
+ROBDDs, with a cold ITE cache. It compares `ite` and
+`ite_parallel` on equivalent inputs, reporting absolute durations,
+paired speedup, efficiency and node counts. Every timed operation
+is checked against the independent Boolean truth table and
+sequential canonical result *after timing*. Default settings are
+bits 8/10/12, concurrency 0/1/2/4/8, 7 samples.
+All performance runs remain manual; only build/tests are allowed
+in CI. This is a hypothesis awaiting reproducible measurements,
+not a proven acceleration.

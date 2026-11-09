@@ -82,3 +82,40 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DTHREAD_SANITIZER=ON
 cmake --build . --parallel
 ctest --output-on-failure
 ```
+
+
+## Manual parallel ITE benchmark
+
+The opt-in `RobddManager::ite_parallel()` method uses the shared
+ThreadManager and up to two fork levels for independent ITE cofactor
+computations. It shares the existing mutex-protected canonical
+unique table and ITE cache; it does **not** use a second pool.
+`ite()` remains the production-default sequential implementation.
+No performance speedup is assumed.
+
+The standalone `benchmark_robdd_parallel_ite` executable uses
+Ariadne Benchmarking (`Parameter`, `Matrix`, `Runner`, `Report`)
+to compare serial and parallel ITE at `--concurrency 0,1,2,4,8`
+in one process. The `--bits` axis (default 8,10,12) controls
+the size of deterministic truth-table ROBDD operands. Each measured
+sample uses a fresh manager with three constructed input formulas,
+so the timed ITE begins from a **cold computed table**. Pool setup,
+manager/input construction, and the independent exhaustive Boolean
+oracle and canonical-result checks remain outside the timer.
+
+From the BDD repository root:
+
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
+cmake --build build-release --target benchmark_robdd_parallel_ite
+./build-release/benchmarks/benchmark_robdd_parallel_ite \
+  --bits 8,10,12 --concurrency 0,1,2,4,8 --samples 7
+```
+
+The results include absolute medians, paired same-configuration
+speedup and efficiency, and machine-readable `ROBDD_PARALLEL_ITE`
+records. Configurations above the machine's concurrency maximum
+are reported as skipped. The experiment is **manual-only**: no
+performance benchmark is executed in CI or registered with CTest.

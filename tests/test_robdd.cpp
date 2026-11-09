@@ -855,7 +855,8 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
             auto not_c=manager.negation(c);
             ARIADNE_TESTING_PROVE(
                 manager.ite_parallel(not_c,e,t)==serial);
-            RobddManager other;\n            Robdd foreign=other.constant(false);
+            RobddManager other;
+            Robdd foreign=other.constant(false);
             ARIADNE_TESTING_EXPECT_EXCEPTION(manager.ite_parallel(c,t,foreign));
         }
     }

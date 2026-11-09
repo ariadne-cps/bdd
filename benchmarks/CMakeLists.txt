@@ -5,3 +5,9 @@ add_executable(benchmark_robdd_nqueens benchmark_robdd_nqueens.cpp)
 target_link_libraries(benchmark_robdd_nqueens PRIVATE
     ariadne-bdd bdd ariadne-benchmarking)
 add_dependencies(benchmarks benchmark_robdd_nqueens)
+
+# Opt-in internal ITE comparison; compile only, never run in CI.
+add_executable(benchmark_robdd_parallel_ite benchmark_robdd_parallel_ite.cpp)
+target_link_libraries(benchmark_robdd_parallel_ite PRIVATE
+    ariadne-bdd bdd ariadne-benchmarking)
+add_dependencies(benchmarks benchmark_robdd_parallel_ite)
