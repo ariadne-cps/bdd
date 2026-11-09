@@ -307,6 +307,16 @@ class RobddManager {
         NodeRef low;
         NodeRef high;
     };
+    // Snapshot of an ITE cache lookup and cofactor decomposition;
+    // only value copies are retained outside the manager mutex.
+    struct IteStep {
+        Bool cached=false;
+        NodeRef cached_result=0u;
+        SizeType variable=0u;
+        std::pair<NodeRef,NodeRef> condition;
+        std::pair<NodeRef,NodeRef> then_branch;
+        std::pair<NodeRef,NodeRef> else_branch;
+    };
 
     static constexpr NodeRef FALSE_NODE = 0u;
     static constexpr NodeRef TRUE_NODE = 1u;
@@ -326,6 +336,11 @@ class RobddManager {
     std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;
 
     NodeRef _make_node(BddVariable variable, NodeRef low, NodeRef high);
+    // _unlocked requires _mutex, and the wrapper acquires it.
+    IteStep _ite_lookup_split_unlocked(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
+    IteStep _ite_lookup_split(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
     NodeRef _ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch);
     NodeRef _ite_parallel(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch,

@@ -599,6 +599,53 @@ RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
     return complement_result ? _negate(result) : result;
 }
 
+// Under one manager lock, check the cache and snapshot each operand node
+// once. No address into _nodes can escape a concurrent vector reallocation.
+RobddManager::IteStep RobddManager::_ite_lookup_split_unlocked(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const {
+    IteStep result{};
+    auto const hit=_ite_cache.find(IteKey(condition,then_branch,else_branch));
+    if(hit!=_ite_cache.end()) {
+        result.cached=true;
+        result.cached_result=hit->second;
+        return result;
+    }
+    std::optional<Node> cnode;
+    std::optional<Node> tnode;
+    std::optional<Node> enode;
+    if(not _is_terminal(condition)) cnode=_nodes[_node_index(condition)];
+    if(not _is_terminal(then_branch)) tnode=_nodes[_node_index(then_branch)];
+    if(not _is_terminal(else_branch)) enode=_nodes[_node_index(else_branch)];
+    SizeType const absent=std::numeric_limits<SizeType>::max();
+    result.variable=std::min({
+        cnode ? cnode->variable.index() : absent,
+        tnode ? tnode->variable.index() : absent,
+        enode ? enode->variable.index() : absent
+    });
+    auto split=[&](NodeRef ref,std::optional<Node> const& node)
+            ->std::pair<NodeRef,NodeRef> {
+        if(not node or node->variable.index()!=result.variable)
+            return {ref,ref};
+        NodeRef low=node->low;
+        NodeRef high=node->high;
+        if(_is_complemented(ref)) {
+            low=_negate(low);
+            high=_negate(high);
+        }
+        return {low,high};
+    };
+    result.condition=split(condition,cnode);
+    result.then_branch=split(then_branch,tnode);
+    result.else_branch=split(else_branch,enode);
+    return result;
+}
+
+RobddManager::IteStep RobddManager::_ite_lookup_split(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _ite_lookup_split_unlocked(condition,then_branch,else_branch);
+}
+
 RobddManager::NodeRef
 RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) {
     if (condition == TRUE_NODE) {
@@ -617,34 +664,14 @@ RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) 
         return _negate(condition);
     }
 
+    IteStep const step=_ite_lookup_split(condition,then_branch,else_branch);
+    if(step.cached) return step.cached_result;
+    NodeRef low=_ite(
+        step.condition.first,step.then_branch.first,step.else_branch.first);
+    NodeRef high=_ite(
+        step.condition.second,step.then_branch.second,step.else_branch.second);
+    NodeRef result=_make_node(BddVariable(step.variable),low,high);
     IteKey key(condition,then_branch,else_branch);
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        auto found = _ite_cache.find(key);
-        if (found != _ite_cache.end()) {
-            return found->second;
-        }
-    }
-
-    SizeType variable = std::min(
-        _top_variable(condition),
-        std::min(_top_variable(then_branch),_top_variable(else_branch)));
-
-    auto condition_cofactors = _cofactor(condition,variable);
-    auto then_cofactors = _cofactor(then_branch,variable);
-    auto else_cofactors = _cofactor(else_branch,variable);
-
-    NodeRef low = _ite(
-        condition_cofactors.first,
-        then_cofactors.first,
-        else_cofactors.first);
-    NodeRef high = _ite(
-        condition_cofactors.second,
-        then_cofactors.second,
-        else_cofactors.second);
-
-    NodeRef result = _make_node(BddVariable(variable),low,high);
-
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _ite_cache.emplace(key,result);
@@ -671,34 +698,23 @@ RobddManager::NodeRef RobddManager::_ite_parallel(
     if(then_branch==FALSE_NODE and else_branch==TRUE_NODE)
         return _negate(condition);
 
-    IteKey key(condition,then_branch,else_branch);
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        auto found=_ite_cache.find(key);
-        if(found!=_ite_cache.end()) return found->second;
-    }
+    IteStep const step=_ite_lookup_split(condition,then_branch,else_branch);
+    if(step.cached) return step.cached_result;
 
-    SizeType variable=std::min(
-        _top_variable(condition),
-        std::min(_top_variable(then_branch),_top_variable(else_branch)));
-    auto cc=_cofactor(condition,variable);
-    auto tc=_cofactor(then_branch,variable);
-    auto ec=_cofactor(else_branch,variable);
-
-    // The right branch executes on a worker, while the caller computes
-    // the left branch. The group joins *before* canonicalizing the parent.
-    // TaskGroup also joins on exception, avoiding children outliving this.
+    // Join before publishing the canonical parent; task inputs are copies.
     TaskGroup<ThreadManager> tasks(ThreadManager::instance());
-    auto right=tasks.fork([this,cc,tc,ec,forks_remaining] {
-        return _ite_parallel(
-            cc.second,tc.second,ec.second,forks_remaining-1u);
+    auto right=tasks.fork([this,step,forks_remaining] {
+        return _ite_parallel(step.condition.second,step.then_branch.second,
+                             step.else_branch.second,forks_remaining-1u);
     });
     NodeRef low=_ite_parallel(
-        cc.first,tc.first,ec.first,forks_remaining-1u);
+        step.condition.first,step.then_branch.first,step.else_branch.first,
+        forks_remaining-1u);
     NodeRef high=right.get();
     tasks.join();
 
-    NodeRef result=_make_node(BddVariable(variable),low,high);
+    NodeRef result=_make_node(BddVariable(step.variable),low,high);
+    IteKey key(condition,then_branch,else_branch);
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _ite_cache.emplace(key,result);
