@@ -20,6 +20,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <cstdint>
 #include <set>
 #include <optional>
 #include <tuple>
@@ -72,6 +73,50 @@ struct RobddManagerStatistics {
     SizeType unique_table_entry_payload_bytes;
     SizeType ite_cache_entries;
     SizeType ite_cache_entry_payload_bytes;
+};
+
+//! \brief Diagnostic counters for a single instrumented ITE computation.
+//! \details Lock wait is summed across threads, and may exceed wall time.
+//! A raced cache insertion counts one completed duplicate ITE key,
+//! not the full amount of computation duplicated in its subtree.
+struct RobddIteProfile {
+    SizeType calls=0u;
+    SizeType cache_lookups=0u;
+    SizeType cache_hits=0u;
+    SizeType cache_raced_inserts=0u;
+    SizeType cache_lock_calls=0u;
+    SizeType cache_lock_contended=0u;
+    SizeType node_lock_calls=0u;
+    SizeType node_lock_contended=0u;
+    SizeType unique_lock_calls=0u;
+    SizeType unique_lock_contended=0u;
+    SizeType tasks_forked=0u;
+    std::uint64_t cache_lock_wait_ns=0u;
+    std::uint64_t node_lock_wait_ns=0u;
+    std::uint64_t unique_lock_wait_ns=0u;
+    std::uint64_t task_submit_ns=0u;
+    std::uint64_t task_join_ns=0u;
+    std::uint64_t task_start_delay_ns=0u;
+
+    void accumulate(RobddIteProfile const& child) {
+        calls+=child.calls;
+        cache_lookups+=child.cache_lookups;
+        cache_hits+=child.cache_hits;
+        cache_raced_inserts+=child.cache_raced_inserts;
+        cache_lock_calls+=child.cache_lock_calls;
+        cache_lock_contended+=child.cache_lock_contended;
+        node_lock_calls+=child.node_lock_calls;
+        node_lock_contended+=child.node_lock_contended;
+        unique_lock_calls+=child.unique_lock_calls;
+        unique_lock_contended+=child.unique_lock_contended;
+        tasks_forked+=child.tasks_forked;
+        cache_lock_wait_ns+=child.cache_lock_wait_ns;
+        node_lock_wait_ns+=child.node_lock_wait_ns;
+        unique_lock_wait_ns+=child.unique_lock_wait_ns;
+        task_submit_ns+=child.task_submit_ns;
+        task_join_ns+=child.task_join_ns;
+        task_start_delay_ns+=child.task_start_delay_ns;
+    }
 };
 
 //! \brief Manager owning canonical ROBDD nodes and the ITE computed table.
@@ -199,6 +244,16 @@ class RobddManager {
     Robdd ite_parallel(
         Robdd const& condition,Robdd const& then_branch,Robdd const& else_branch);
 
+    //! \brief Diagnose the serial or bounded-parallel ITE on this manager.
+    //! \details An explicitly instrumented recursion; never selected by ite()
+    //! or ite_parallel(). The result remains canonical. Locks, cache races,
+    //! and task lifecycle costs are counted; instrumentation itself affects
+    //! performance and its times must NOT be treated as production timings.
+    //! The caller must not mutate the output counters until the call returns.
+    Robdd ite_profiled(
+        Robdd const& condition,Robdd const& then_branch,Robdd const& else_branch,
+        Bool parallel,RobddIteProfile& counters);
+
     //! \brief Evaluate a function under a Boolean assignment.
     //! \details assignment[i] gives the truth value of variable i;
     //! indices absent from the function's support are ignored.
@@ -275,6 +330,15 @@ class RobddManager {
     NodeRef _ite_parallel(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch,
         unsigned forks_remaining);
+    Node _node_profiled(NodeRef ref,RobddIteProfile& counters) const;
+    SizeType _top_variable_profiled(NodeRef ref,RobddIteProfile& counters) const;
+    std::pair<NodeRef,NodeRef> _cofactor_profiled(
+        NodeRef ref,SizeType variable,RobddIteProfile& counters) const;
+    NodeRef _make_node_profiled(
+        BddVariable variable,NodeRef low,NodeRef high,RobddIteProfile& counters);
+    NodeRef _ite_profiled(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
+        RobddIteProfile& counters,unsigned forks_remaining);
 
   private:
     mutable std::mutex _mutex;

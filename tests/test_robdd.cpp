@@ -861,6 +861,63 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_ite_profiled_diagnostics() {
+        struct Restore {
+            ThreadManager& manager;
+            SizeType value;
+            ~Restore() noexcept {
+                try { manager.set_concurrency(value); } catch (...) { }
+            }
+        };
+        ThreadManager& threading=ThreadManager::instance();
+        Restore restore{threading,threading.concurrency()};
+
+        for(SizeType workers:std::array<SizeType,4>{0u,1u,2u,4u}) {
+            if(workers>threading.maximum_concurrency()) continue;
+            threading.set_concurrency(workers);
+            RobddManager manager;
+            auto x=manager.variable(0u);
+            auto y=manager.variable(1u);
+            auto z=manager.variable(2u);
+            auto condition=manager.exclusive_or(x,y);
+            auto then_branch=manager.exclusive_or(y,z);
+            auto else_branch=manager.disjunction(x,z);
+
+            RobddIteProfile counters;
+            Robdd actual=manager.ite_profiled(
+                condition,then_branch,else_branch,true,counters);
+            Robdd expected=manager.ite(condition,then_branch,else_branch);
+            ARIADNE_TESTING_PROVE(actual==expected);
+            ARIADNE_TESTING_PROVE(counters.calls>0u);
+            ARIADNE_TESTING_PROVE(
+                counters.cache_lock_calls>=counters.cache_lookups);
+            ARIADNE_TESTING_PROVE(
+                counters.cache_lock_contended<=counters.cache_lock_calls);
+            ARIADNE_TESTING_PROVE(
+                counters.node_lock_contended<=counters.node_lock_calls);
+            ARIADNE_TESTING_PROVE(
+                counters.unique_lock_contended<=counters.unique_lock_calls);
+            ARIADNE_TESTING_PROVE(
+                counters.cache_hits<=counters.cache_lookups);
+            if(workers<2u) {
+                ARIADNE_TESTING_EXPECT_EQUAL(counters.tasks_forked,0u);
+                ARIADNE_TESTING_EXPECT_EQUAL(counters.cache_raced_inserts,0u);
+            }
+            RobddIteProfile warm;
+            ARIADNE_TESTING_PROVE(
+                manager.ite_profiled(
+                    condition,then_branch,else_branch,false,warm)
+                ==expected);
+            ARIADNE_TESTING_PROVE(warm.cache_hits>0u);
+            ARIADNE_TESTING_EXPECT_EQUAL(warm.tasks_forked,0u);
+
+            RobddManager other;
+            ARIADNE_TESTING_EXPECT_EXCEPTION(manager.ite_profiled(
+                condition,then_branch,other.constant(false),
+                true,counters));
+        }
+    }
+
     void test_concurrent_canonical_construction() {
         auto& thread_manager = ThreadManager::instance();
         SizeType maximum = thread_manager.maximum_concurrency();
@@ -925,5 +982,6 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
 }

@@ -14,6 +14,7 @@
  */
 
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <limits>
 #include <set>
@@ -361,6 +362,21 @@ Robdd RobddManager::ite_parallel(
     return Robdd(this,_ite_parallel(c,t,e,2u));
 }
 
+Robdd RobddManager::ite_profiled(
+        Robdd const& condition,
+        Robdd const& then_branch,
+        Robdd const& else_branch,
+        Bool parallel,RobddIteProfile& counters)
+{
+    NodeRef const c=_validate(condition);
+    NodeRef const t=_validate(then_branch);
+    NodeRef const e=_validate(else_branch);
+    counters=RobddIteProfile{};
+    unsigned const budget=(parallel and
+        ThreadManager::instance().concurrency()>=2u) ? 2u : 0u;
+    return Robdd(this,_ite_profiled(c,t,e,counters,budget));
+}
+
 Bool RobddManager::evaluate(
         Robdd const& value,
         BinaryWord const& assignment) const
@@ -686,6 +702,176 @@ RobddManager::NodeRef RobddManager::_ite_parallel(
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _ite_cache.emplace(key,result);
+    }
+    return result;
+}
+
+namespace {
+
+using IteProfileClock=std::chrono::steady_clock;
+
+std::uint64_t ite_profile_nanoseconds(IteProfileClock::duration elapsed) {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+}
+
+// Separate profiling-only lock acquisition: uncontended locks are counted,
+// while wait time is measured only after a failed try_lock(). This probe
+// perturbs contention and is never used by the default ROBDD algorithms.
+class IteProfileLock {
+  public:
+    IteProfileLock(
+        std::mutex& mutex,SizeType& attempts,SizeType& contended,
+        std::uint64_t& wait_ns)
+        : _lock(mutex,std::defer_lock)
+    {
+        ++attempts;
+        if(not _lock.try_lock()) {
+            ++contended;
+            auto const start=IteProfileClock::now();
+            _lock.lock();
+            wait_ns+=ite_profile_nanoseconds(IteProfileClock::now()-start);
+        }
+    }
+  private:
+    std::unique_lock<std::mutex> _lock;
+};
+
+} // namespace
+
+RobddManager::Node RobddManager::_node_profiled(
+        NodeRef ref,RobddIteProfile& counters) const {
+    IteProfileLock lock(
+        _mutex,counters.node_lock_calls,counters.node_lock_contended,
+        counters.node_lock_wait_ns);
+    return _nodes[_node_index(ref)];
+}
+
+SizeType RobddManager::_top_variable_profiled(
+        NodeRef ref,RobddIteProfile& counters) const {
+    if(_is_terminal(ref)) return std::numeric_limits<SizeType>::max();
+    return _node_profiled(ref,counters).variable.index();
+}
+
+std::pair<RobddManager::NodeRef,RobddManager::NodeRef>
+RobddManager::_cofactor_profiled(
+        NodeRef ref,SizeType variable,RobddIteProfile& counters) const {
+    if(_is_terminal(ref)) return {ref,ref};
+    Node node=_node_profiled(ref,counters);
+    if(node.variable.index()!=variable) return {ref,ref};
+    NodeRef low=node.low;
+    NodeRef high=node.high;
+    if(_is_complemented(ref)) {
+        low=_negate(low);
+        high=_negate(high);
+    }
+    return {low,high};
+}
+
+RobddManager::NodeRef RobddManager::_make_node_profiled(
+        BddVariable variable,NodeRef low,NodeRef high,
+        RobddIteProfile& counters) {
+    if(low==high) return low;
+    Bool complement=false;
+    if(_is_complemented(low)) {
+        low=_negate(low);
+        high=_negate(high);
+        complement=true;
+    }
+    NodeKey key(variable.index(),low,high);
+    NodeRef result;
+    {
+        IteProfileLock lock(
+            _mutex,counters.unique_lock_calls,counters.unique_lock_contended,
+            counters.unique_lock_wait_ns);
+        auto found=_unique_table.find(key);
+        if(found!=_unique_table.end()) {
+            result=found->second;
+        } else {
+            result=_make_regular_node_ref(_nodes.size());
+            _nodes.push_back(Node{variable,low,high});
+            _unique_table.emplace(key,result);
+        }
+    }
+    return complement ? _negate(result) : result;
+}
+
+RobddManager::NodeRef RobddManager::_ite_profiled(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
+        RobddIteProfile& counters,unsigned forks_remaining) {
+    ++counters.calls;
+    if(condition==TRUE_NODE) return then_branch;
+    if(condition==FALSE_NODE) return else_branch;
+    if(then_branch==else_branch) return then_branch;
+    if(then_branch==TRUE_NODE and else_branch==FALSE_NODE)
+        return condition;
+    if(then_branch==FALSE_NODE and else_branch==TRUE_NODE)
+        return _negate(condition);
+
+    IteKey key(condition,then_branch,else_branch);
+    ++counters.cache_lookups;
+    {
+        IteProfileLock lock(
+            _mutex,counters.cache_lock_calls,counters.cache_lock_contended,
+            counters.cache_lock_wait_ns);
+        auto found=_ite_cache.find(key);
+        if(found!=_ite_cache.end()) {
+            ++counters.cache_hits;
+            return found->second;
+        }
+    }
+
+    SizeType const variable=std::min(
+        _top_variable_profiled(condition,counters),
+        std::min(_top_variable_profiled(then_branch,counters),
+                 _top_variable_profiled(else_branch,counters)));
+    auto cc=_cofactor_profiled(condition,variable,counters);
+    auto tc=_cofactor_profiled(then_branch,variable,counters);
+    auto ec=_cofactor_profiled(else_branch,variable,counters);
+
+    NodeRef low;
+    NodeRef high;
+    if(forks_remaining==0u) {
+        low=_ite_profiled(cc.first,tc.first,ec.first,counters,0u);
+        high=_ite_profiled(cc.second,tc.second,ec.second,counters,0u);
+    } else {
+        // Exclusive per-task counters: no global atomic accumulation in
+        // inner loops. Merge child metrics only after the task is joined.
+        RobddIteProfile high_counters;
+        TaskGroup<ThreadManager> tasks(ThreadManager::instance());
+        auto const submit_start=IteProfileClock::now();
+        auto right=tasks.fork(
+            [this,cc,tc,ec,forks_remaining,&high_counters,submit_start] {
+                high_counters.task_start_delay_ns+=ite_profile_nanoseconds(
+                    IteProfileClock::now()-submit_start);
+                return _ite_profiled(
+                    cc.second,tc.second,ec.second,
+                    high_counters,forks_remaining-1u);
+            });
+        ++counters.tasks_forked;
+        counters.task_submit_ns+=ite_profile_nanoseconds(
+            IteProfileClock::now()-submit_start);
+        low=_ite_profiled(
+            cc.first,tc.first,ec.first,counters,forks_remaining-1u);
+        auto const join_start=IteProfileClock::now();
+        high=right.get();
+        counters.task_join_ns+=ite_profile_nanoseconds(
+            IteProfileClock::now()-join_start);
+        tasks.join();
+        counters.accumulate(high_counters);
+    }
+
+    NodeRef const result=_make_node_profiled(
+        BddVariable(variable),low,high,counters);
+    {
+        IteProfileLock lock(
+            _mutex,counters.cache_lock_calls,counters.cache_lock_contended,
+            counters.cache_lock_wait_ns);
+        auto const inserted=_ite_cache.emplace(key,result);
+        // A completed ITE key was already inserted between the cache
+        // miss and this insertion: direct evidence of duplicate work.
+        // It does not count all shared descendant work.
+        if(not inserted.second) ++counters.cache_raced_inserts;
     }
     return result;
 }
