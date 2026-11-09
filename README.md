@@ -288,3 +288,38 @@ compare the existing end-to-end ITE benchmark across the
 two builds. The old code predates this dedicated executable
 and requires a comparable benchmark port or isolated
 container-only A/B. All timing remains manual.
+
+### Ordered versus hash unique-table A/B (manual)
+
+The production default remains `std::unordered_map`. Configure
+`-DARIADNE_BDD_UNIQUE_TABLE_ORDERED=ON` to select the original
+`std::map` unique table. CMake exports this macro through the
+public `bdd` INTERFACE target because it changes the
+`RobddManager` object layout. **Never mix a library built for
+one selection with headers or client objects built for the other.**
+
+The manual driver compiles both variants in **separate** Release
+build directories, runs ordinary `test_robdd` correctness tests
+in both, then runs the *same* canonicalization and cold-cache ITE
+Benchmarking programs in **hash–ordered–ordered–hash** order.
+Neither performance benchmark is invoked by CI or CTest.
+
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+bash benchmarks/run_unique_table_ab.sh
+```
+
+The resulting directory contains a manifest and eight logs with
+the compile-time `unique_table=hash|ordered` identifier on
+machine-readable benchmark rows. Default settings are
+`KEYS=256,1024,4096`, `BITS=8,10,12`,
+`CONCURRENCY=0,1,2,4,8`, `SAMPLES=7` and
+`PROFILE_SAMPLES=0`. Environment variables `RESULT_DIR`,
+`HASH_BUILD` and `ORDERED_BUILD` override paths.
+
+Use **absolute serial ns/key and ms/ITE** to decide whether
+the hash table improves production performance; report scheduled
+and parallel variants separately. ABBA order reduces simple
+run-order bias, but still requires repeated measurements when
+environmental noise is appreciable.

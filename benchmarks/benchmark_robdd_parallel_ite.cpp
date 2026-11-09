@@ -22,6 +22,11 @@ using namespace Ariadne;
 namespace Bench=Ariadne::Benchmarking;
 
 namespace {
+#if defined(ARIADNE_BDD_UNIQUE_TABLE_ORDERED)
+constexpr char const* unique_table_variant="ordered";
+#else
+constexpr char const* unique_table_variant="hash";
+#endif
 
 struct Result {
     unsigned bits;
@@ -157,7 +162,8 @@ void profile_ite(unsigned bits,SizeType concurrency,bool parallel,
             counters.cache_lock_calls
             +counters.node_lock_calls
             +counters.unique_lock_calls;
-        LOGGING_PRINTLN("ROBDD_ITE_PROFILE bits="<<bits
+        LOGGING_PRINTLN("ROBDD_ITE_PROFILE unique_table="<<unique_table_variant
+            <<" bits="<<bits
             <<" concurrency="<<concurrency
             <<" method="<<method
             <<" repeat="<<repeat
@@ -219,7 +225,8 @@ void print_report(std::vector<Result> const& results,
         },row.statistics);
     report.print();
     for(auto const& row:results) {
-        LOGGING_PRINTLN("ROBDD_PARALLEL_ITE bits="<<row.bits
+        LOGGING_PRINTLN("ROBDD_PARALLEL_ITE unique_table="<<unique_table_variant
+            <<" bits="<<row.bits
             <<" concurrency="<<row.concurrency
             <<" method="<<row.method
             <<" median_ms="<<std::setprecision(9)<<row.statistics.median/1e6

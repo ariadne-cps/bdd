@@ -1704,3 +1704,43 @@ executed in CI. The latest hash-table commit's five regular
 CI workflows (Ubuntu, macOS, Windows, Sanitizers, Coverage)
 all completed successfully; this is useful correctness
 evidence, not a proof against every possible concurrent race.
+
+### 2026-11-09 - ABI-safe manual hash versus ordered A/B
+
+Added `ARIADNE_BDD_UNIQUE_TABLE_ORDERED` as an opt-in
+CMake option (OFF by default). ON uses the exact legacy
+`std::map<NodeKey,NodeRef>`; OFF uses the existing
+`std::unordered_map<NodeKey,NodeRef,NodeKeyHash>`.
+Only the canonical unique-table container changes. Both
+variants preserve the original manager mutex, computed ITE
+cache, node-reference allocation policy, complemented-edge
+normalization and semantic correctness expectations.
+
+**ABI contract:** since the container is a member of
+`RobddManager`, this compile-time choice changes the class
+layout. Its macro is propagated through `bdd`'s public
+CMake INTERFACE target (and through its use by `BDD_SRC`
+and `ariadne-bdd`); all clients and the library must use
+the *same* option. The manual A/B script builds distinct
+Release directories to prevent object or library mixing.
+
+`benchmarks/run_unique_table_ab.sh` compiles and tests
+both builds, then replays the same manual Benchmarking
+unique-table and cold-cache ITE programs in hash/ordered/
+ordered/hash sequence. It logs source revision, environment
+and results by build variant. Machine output carries an
+additional `unique_table` field. The key study measures
+fresh/previously interned node construction, serial and
+scheduled; the ITE study measures serial and opt-in
+parallel recursion. The two benchmarks use the same
+sources, key distributions, number of samples and Release
+flags in both variants. The diagnostics default to disabled
+in the A/B script to avoid extra instrumented work.
+
+Primary decision metric is absolute **serial** median
+time for canonicalization and for cold ITE, followed by
+scheduled/parallel performance and memory tradeoffs.
+ABBA sampling mitigates monotonic environmental drift,
+not all variability; multiple repetitions are appropriate.
+The A/B experiment has **no results yet**. All performance
+benchmarks remain strictly manual, with no CI or CTest runs.

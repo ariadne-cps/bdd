@@ -27,6 +27,11 @@ using namespace Ariadne;
 namespace Bench=Ariadne::Benchmarking;
 
 namespace {
+#if defined(ARIADNE_BDD_UNIQUE_TABLE_ORDERED)
+constexpr char const* unique_table_variant="ordered";
+#else
+constexpr char const* unique_table_variant="hash";
+#endif
 
 struct RestoreConcurrency {
     ThreadManager& manager;
@@ -159,7 +164,8 @@ void report(std::vector<Result> const& results,Bench::CommandLine const& cli) {
         },row.timing);
     output.print();
     for(auto const& row:results) {
-        LOGGING_PRINTLN("ROBDD_UNIQUE_TABLE keys="<<row.keys
+        LOGGING_PRINTLN("ROBDD_UNIQUE_TABLE unique_table="<<unique_table_variant
+            <<" keys="<<row.keys
             <<" concurrency="<<row.concurrency
             <<" workload="<<row.workload
             <<" method="<<row.method

@@ -4,6 +4,8 @@ project(Bdd VERSION 1.0)
 
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
+option(ARIADNE_BDD_UNIQUE_TABLE_ORDERED
+    "Use legacy ordered canonical unique table for manual A/B measurements" OFF)
 
 if(NOT TARGET ariadne-build)
     find_package(Git REQUIRED)
@@ -38,6 +40,13 @@ target_include_directories(bdd INTERFACE
     $<INSTALL_INTERFACE:include/ariadne-bdd>
 )
 target_link_libraries(bdd INTERFACE threading)
+# RobddManager contains the table as a data member. Propagate the same
+# selection to BDD_SRC, public consumers, tests and benchmark executables
+# via this common interface; a private definition would violate its ABI.
+if(ARIADNE_BDD_UNIQUE_TABLE_ORDERED)
+    target_compile_definitions(bdd INTERFACE
+        ARIADNE_BDD_UNIQUE_TABLE_ORDERED=1)
+endif()
 
 add_subdirectory(src)
 target_link_libraries(BDD_SRC PRIVATE bdd)

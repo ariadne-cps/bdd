@@ -378,7 +378,11 @@ class RobddManager {
   private:
     mutable std::mutex _mutex;
     std::vector<Node> _nodes;
+#if defined(ARIADNE_BDD_UNIQUE_TABLE_ORDERED)
+    std::map<NodeKey,NodeRef> _unique_table;
+#else
     std::unordered_map<NodeKey,NodeRef,NodeKeyHash> _unique_table;
+#endif
     std::map<IteKey,NodeRef> _ite_cache;
 };
 
