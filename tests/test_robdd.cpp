@@ -802,6 +802,64 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_EXPECT_EXCEPTION(first.conjunction(x,y));
     }
 
+    void test_parallel_ite_truth_tables_and_canonicality() {
+        struct Restore {
+            ThreadManager& manager;
+            SizeType saved;
+            ~Restore() noexcept {
+                try { manager.set_concurrency(saved); } catch (...) { }
+            }
+        };
+        ThreadManager& threading=ThreadManager::instance();
+        Restore restore{threading,threading.concurrency()};
+
+        // Fresh managers for each worker setting force a genuinely cold
+        // computed table. Random-looking truth tables force nontrivial ITE.
+        for(SizeType workers:std::array<SizeType,5>{0u,1u,2u,4u,8u}) {
+            if(workers>threading.maximum_concurrency()) continue;
+            threading.set_concurrency(workers);
+            RobddManager manager;
+            constexpr unsigned bits=7u;
+            auto leaf_bit=[](SizeType assignment,SizeType salt) -> Bool {
+                std::uint64_t v=static_cast<std::uint64_t>(assignment)
+                    + 0x9e3779b97f4a7c15ULL*(salt+1u);
+                v=(v^(v>>30u))*0xbf58476d1ce4e5b9ULL;
+                v=(v^(v>>27u))*0x94d049bb133111ebULL;
+                return ((v^(v>>31u))&1u)!=0u;
+            };
+            auto build=[&](auto&& self,unsigned level,
+                           SizeType assignment,SizeType salt)->Robdd {
+                if(level==bits)
+                    return manager.constant(leaf_bit(assignment,salt));
+                auto low=self(self,level+1u,assignment,salt);
+                auto high=self(self,level+1u,assignment|(SizeType(1u)<<level),salt);
+                return manager.make_node(BddVariable(level),low,high);
+            };
+            Robdd c=build(build,0u,0u,1u);
+            Robdd t=build(build,0u,0u,2u);
+            Robdd e=build(build,0u,0u,3u);
+            Robdd parallel=manager.ite_parallel(c,t,e);
+            Robdd serial=manager.ite(c,t,e);
+            ARIADNE_TESTING_PROVE(parallel==serial);
+            ARIADNE_TESTING_PROVE(manager.ite_parallel(c,t,e)==serial);
+            for(SizeType assignment=0u;assignment!=(SizeType(1u)<<bits);++assignment) {
+                BinaryWord word;
+                for(unsigned level=0u;level<bits;++level)
+                    word.push_back(((assignment>>level)&1u)!=0u);
+                Bool expected=manager.evaluate(c,word)
+                    ? manager.evaluate(t,word)
+                    : manager.evaluate(e,word);
+                ARIADNE_TESTING_EXPECT_EQUAL(
+                    manager.evaluate(parallel,word),expected);
+            }
+            auto not_c=manager.negation(c);
+            ARIADNE_TESTING_PROVE(
+                manager.ite_parallel(not_c,e,t)==serial);
+            RobddManager other;\n            Robdd foreign=other.constant(false);
+            ARIADNE_TESTING_EXPECT_EXCEPTION(manager.ite_parallel(c,t,foreign));
+        }
+    }
+
     void test_concurrent_canonical_construction() {
         auto& thread_manager = ThreadManager::instance();
         SizeType maximum = thread_manager.maximum_concurrency();
@@ -865,5 +923,6 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_statistics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
 }

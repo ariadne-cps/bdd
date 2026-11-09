@@ -188,6 +188,17 @@ class RobddManager {
     //! \pre All three operands must belong to this manager.
     Robdd ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch);
 
+    //! \brief Compute if-then-else by reducing independent cofactors in parallel.
+    //! \details Opt-in bounded fork/join over the same canonical manager as ite().
+    //! Uses the shared ThreadManager, falling back to serial ITE when its
+    //! concurrency is less than two. The manager's unique table and computed
+    //! table remain synchronised; no second manager or worker pool is created.
+    //! The caller must not destroy or reconfigure the manager or ThreadManager
+    //! while the operation is in progress.
+    //! \pre All three operands must belong to this manager.
+    Robdd ite_parallel(
+        Robdd const& condition,Robdd const& then_branch,Robdd const& else_branch);
+
     //! \brief Evaluate a function under a Boolean assignment.
     //! \details assignment[i] gives the truth value of variable i;
     //! indices absent from the function's support are ignored.
@@ -261,6 +272,9 @@ class RobddManager {
 
     NodeRef _make_node(BddVariable variable, NodeRef low, NodeRef high);
     NodeRef _ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch);
+    NodeRef _ite_parallel(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
+        unsigned forks_remaining);
 
   private:
     mutable std::mutex _mutex;

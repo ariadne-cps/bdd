@@ -20,6 +20,7 @@
 
 #include "utility/macros.hpp"
 #include "bdd/robdd.hpp"
+#include "threading/task_group.hpp"
 
 namespace Ariadne {
 
@@ -345,6 +346,21 @@ Robdd RobddManager::ite(
     return Robdd(this,_ite(c,t,e));
 }
 
+Robdd RobddManager::ite_parallel(
+        Robdd const& condition,
+        Robdd const& then_branch,
+        Robdd const& else_branch)
+{
+    NodeRef c = _validate(condition);
+    NodeRef t = _validate(then_branch);
+    NodeRef e = _validate(else_branch);
+    // Bounded to two levels (at most four independent subproblems).
+    // Small/one-worker computations use the exact existing algorithm.
+    if(ThreadManager::instance().concurrency()<2u)
+        return Robdd(this,_ite(c,t,e));
+    return Robdd(this,_ite_parallel(c,t,e,2u));
+}
+
 Bool RobddManager::evaluate(
         Robdd const& value,
         BinaryWord const& assignment) const
@@ -613,6 +629,60 @@ RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) 
 
     NodeRef result = _make_node(BddVariable(variable),low,high);
 
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _ite_cache.emplace(key,result);
+    }
+    return result;
+}
+
+// Parallel ITE works on disjoint *computations*, not exclusively owned
+// DAG nodes. Concurrent branches may revisit a shared subgraph, but every
+// canonical allocation and memo-table access remains manager-locked.
+// A bounded fork budget avoids recursive task explosion.
+RobddManager::NodeRef RobddManager::_ite_parallel(
+        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
+        unsigned forks_remaining) {
+    if(forks_remaining==0u)
+        return _ite(condition,then_branch,else_branch);
+
+    // Identical terminal and tautological reductions to sequential _ite.
+    if(condition==TRUE_NODE) return then_branch;
+    if(condition==FALSE_NODE) return else_branch;
+    if(then_branch==else_branch) return then_branch;
+    if(then_branch==TRUE_NODE and else_branch==FALSE_NODE)
+        return condition;
+    if(then_branch==FALSE_NODE and else_branch==TRUE_NODE)
+        return _negate(condition);
+
+    IteKey key(condition,then_branch,else_branch);
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        auto found=_ite_cache.find(key);
+        if(found!=_ite_cache.end()) return found->second;
+    }
+
+    SizeType variable=std::min(
+        _top_variable(condition),
+        std::min(_top_variable(then_branch),_top_variable(else_branch)));
+    auto cc=_cofactor(condition,variable);
+    auto tc=_cofactor(then_branch,variable);
+    auto ec=_cofactor(else_branch,variable);
+
+    // The right branch executes on a worker, while the caller computes
+    // the left branch. The group joins *before* canonicalizing the parent.
+    // TaskGroup also joins on exception, avoiding children outliving this.
+    TaskGroup<ThreadManager> tasks(ThreadManager::instance());
+    auto right=tasks.fork([this,cc,tc,ec,forks_remaining] {
+        return _ite_parallel(
+            cc.second,tc.second,ec.second,forks_remaining-1u);
+    });
+    NodeRef low=_ite_parallel(
+        cc.first,tc.first,ec.first,forks_remaining-1u);
+    NodeRef high=right.get();
+    tasks.join();
+
+    NodeRef result=_make_node(BddVariable(variable),low,high);
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _ite_cache.emplace(key,result);
