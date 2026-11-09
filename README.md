@@ -166,3 +166,34 @@ Run manually in Release after building the benchmark:
 ```
 
 No performance benchmark is run as part of CI.
+
+
+### Node-store concurrency experiment (2026-11-09)
+
+The first ITE profile shows roughly 64% of manager lock acquisitions
+come from node reads, while raced ITE insertions are nearly absent.
+To isolate this bottleneck without weakening canonicality, the
+**first** lock-topology experiment changes **only** node storage to a
+`std::shared_mutex`. Unique table and ITE cache remain protected by
+the original `std::mutex`, so their behavior is unchanged.
+
+Reader operations copy node values while holding a shared node lock.
+New canonical nodes acquire the manager lock first, then the node
+lock *exclusively* for insertion and possible vector relocation.
+`statistics()` acquires both locks in the same order to preserve a
+coherent node/unique-table snapshot. `node_count()` takes a shared
+node lock. The diagnostic path follows the same rules; its node
+acquisition counters now include **both shared reads and exclusive
+writes**, and still measure instrumented behavior, not production
+timing.
+
+A targeted regression exercises concurrent manager growth, canonical
+construction, node/cofactor reads, evaluation and coherent snapshot
+reads. This must pass the project's normal builds and ThreadSanitizer
+before claiming the manager remains thread-safe. No per-node locks,
+new scheduler or asynchronous benchmark CI runs were introduced.
+
+The change is intentionally **not** a split of all three locks.
+Measurements must establish whether this lower-risk change helps
+both serial and parallel ITE; if it makes serial worse, it should be
+reverted even if one parallel case improves.

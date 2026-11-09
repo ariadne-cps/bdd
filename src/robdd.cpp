@@ -482,12 +482,16 @@ void RobddManager::for_each_satisfying_assignment(
 }
 
 SizeType RobddManager::node_count() const {
-    std::lock_guard<std::mutex> lock(_mutex);
+    std::shared_lock<std::shared_mutex> lock(_nodes_mutex);
     return _nodes.size();
 }
 
 RobddManagerStatistics RobddManager::statistics() const {
-    std::lock_guard<std::mutex> lock(_mutex);
+    // The combined snapshot must not observe a node insertion before
+    // the unique-table entry has been published. Lock order matches
+    // _make_node(): canonical manager lock before node-storage lock.
+    std::lock_guard<std::mutex> canonical_lock(_mutex);
+    std::shared_lock<std::shared_mutex> node_lock(_nodes_mutex);
     return RobddManagerStatistics{
         _nodes.size(),
         _nodes.capacity(),
@@ -533,7 +537,9 @@ SizeType RobddManager::_validate_variable_domain(
 }
 
 RobddManager::Node RobddManager::_node(NodeRef ref) const {
-    std::lock_guard<std::mutex> lock(_mutex);
+    // Copy the immutable node before releasing the shared lock. Its
+    // physical vector storage may relocate when another thread inserts.
+    std::shared_lock<std::shared_mutex> lock(_nodes_mutex);
     return _nodes[_node_index(ref)];
 }
 
@@ -590,6 +596,9 @@ RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
         if (found != _unique_table.end()) {
             result = found->second;
         } else {
+            // _mutex already serializes unique-table changes; node storage
+            // is additionally exclusive against *all* concurrent readers.
+            std::unique_lock<std::shared_mutex> node_lock(_nodes_mutex);
             result = _make_regular_node_ref(_nodes.size());
             _nodes.push_back(Node{variable,low,high});
             _unique_table.emplace(key,result);
@@ -718,10 +727,13 @@ std::uint64_t ite_profile_nanoseconds(IteProfileClock::duration elapsed) {
 // Separate profiling-only lock acquisition: uncontended locks are counted,
 // while wait time is measured only after a failed try_lock(). This probe
 // perturbs contention and is never used by the default ROBDD algorithms.
-class IteProfileLock {
+// Three lock modes share one probe implementation. A shared node read
+// never races with insertion/reallocation; an exclusive node write is
+// acquired only *after* the canonical manager mutex.
+template<class Mutex,class Guard> class IteProfileLockBase {
   public:
-    IteProfileLock(
-        std::mutex& mutex,SizeType& attempts,SizeType& contended,
+    IteProfileLockBase(
+        Mutex& mutex,SizeType& attempts,SizeType& contended,
         std::uint64_t& wait_ns)
         : _lock(mutex,std::defer_lock)
     {
@@ -734,15 +746,22 @@ class IteProfileLock {
         }
     }
   private:
-    std::unique_lock<std::mutex> _lock;
+    Guard _lock;
 };
+
+using IteProfileLock=IteProfileLockBase<
+    std::mutex,std::unique_lock<std::mutex>>;
+using IteProfileNodeReadLock=IteProfileLockBase<
+    std::shared_mutex,std::shared_lock<std::shared_mutex>>;
+using IteProfileNodeWriteLock=IteProfileLockBase<
+    std::shared_mutex,std::unique_lock<std::shared_mutex>>;
 
 } // namespace
 
 RobddManager::Node RobddManager::_node_profiled(
         NodeRef ref,RobddIteProfile& counters) const {
-    IteProfileLock lock(
-        _mutex,counters.node_lock_calls,counters.node_lock_contended,
+    IteProfileNodeReadLock lock(
+        _nodes_mutex,counters.node_lock_calls,counters.node_lock_contended,
         counters.node_lock_wait_ns);
     return _nodes[_node_index(ref)];
 }
@@ -788,6 +807,9 @@ RobddManager::NodeRef RobddManager::_make_node_profiled(
         if(found!=_unique_table.end()) {
             result=found->second;
         } else {
+            IteProfileNodeWriteLock node_lock(
+                _nodes_mutex,counters.node_lock_calls,
+                counters.node_lock_contended,counters.node_lock_wait_ns);
             result=_make_regular_node_ref(_nodes.size());
             _nodes.push_back(Node{variable,low,high});
             _unique_table.emplace(key,result);

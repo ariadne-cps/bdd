@@ -1393,3 +1393,47 @@ This update does not change the normal manager algorithm,
 does not auto-parallelize ITE and does not execute performance
 benchmarks from CI. New results are pending the operator's
 manual Release run.
+
+
+### 2026-11-09 - First lock-topology experiment: shared node reads only
+
+Operator-supplied `ROBDD_ITE_PROFILE` results (one diagnostic run per
+configuration) show that 8/10/12-bit cold-cache ITE performs
+772/2684/10278 physical-node reads in the sequential version,
+compared to 1178/4167/15982 total lock acquisitions. This is
+approximately 64% of lock acquisitions. Concurrent duplicate
+computed-table insertions were only 0-1 per case; the recursive
+call counts were essentially identical for serial and parallel.
+At 12 bits, concurrency 2/4/8 recorded 392/552/546 contended lock
+acquisitions and summed lock wait times 4.36/4.60/4.15 ms. These
+instrumented summed durations can exceed observed noninstrumented
+wall times: do not add or subtract them as disjoint components.
+
+**Conservative concurrency-preserving implementation:** leave
+`_mutex` responsible for both unique-table interning and the ITE
+computed table. Introduce a separate `std::shared_mutex
+_nodes_mutex` around **all** physical-node storage accesses.
+`_node`/diagnostic reads and `node_count` acquire shared ownership
+and copy out immutable nodes; new-node insertion holds the existing
+canonical `_mutex` then exclusively locks `_nodes_mutex` before
+reading capacity/size or appending. `statistics` holds
+`_mutex` then the node shared lock to keep the node-table and
+unique-table counts in a consistent state. No path may acquire
+`_mutex` while holding `_nodes_mutex`; the lock order is fixed.
+
+The profiling-only node path is updated to use shared/exclusive
+node-store locks too, preserving diagnostics under the same
+thread-safety contract. The node lock call/contended metrics now
+include reads **and** insertion writes, and report this changed
+semantics. Independent tests spawn concurrent writers that force
+vector growth and readers that traverse prior references and call
+`statistics()`; every snapshot must satisfy
+`unique_table_entries == node_count`.
+
+**Status:** the lock topology is an unverified performance hypothesis
+until C++ tests, all platform builds and sanitizer coverage succeed;
+equivalence under the test does not imply a universal race-freedom
+proof. Re-run the existing manual Benchmarking matrix with the same
+bits/concurrency/samples and compare both serial and parallel
+medians against the pre-change results. Performance benchmarks are
+not run in CI.

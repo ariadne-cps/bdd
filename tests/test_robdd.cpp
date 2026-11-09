@@ -918,6 +918,71 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_node_readers_during_concurrent_growth() {
+        // Repeated reallocations of the physical node vector must not race
+        // with reads of already published canonical node references.
+        auto& threading=ThreadManager::instance();
+        SizeType const maximum=threading.maximum_concurrency();
+        if(maximum<2u) return;
+
+        struct Restore {
+            ThreadManager& manager;
+            SizeType saved;
+            ~Restore() noexcept {
+                try { manager.set_concurrency(saved); } catch (...) { }
+            }
+        };
+        Restore restore{threading,threading.concurrency()};
+        threading.set_concurrency(std::min<SizeType>(maximum,4u));
+
+        RobddManager manager;
+        Robdd const x=manager.variable(0u);
+        Robdd const y=manager.variable(1u);
+        Robdd const xy=manager.conjunction(x,y);
+        BinaryWord const assignment=make_binary_word("11");
+
+        std::vector<std::future<void>> futures;
+        for(SizeType writer=0u;writer<4u;++writer) {
+            futures.push_back(threading.enqueue([&,writer] {
+                for(SizeType i=0u;i<256u;++i) {
+                    Robdd v=manager.variable(2u+writer*256u+i);
+                    Robdd combined=manager.conjunction(x,v);
+                    if(not manager.top_variable(combined).has_value())
+                        throw std::runtime_error("Lost canonical root");
+                }
+            }));
+        }
+        for(SizeType reader=0u;reader<4u;++reader) {
+            futures.push_back(threading.enqueue([&] {
+                for(SizeType i=0u;i<256u;++i) {
+                    if(not manager.evaluate(xy,assignment))
+                        throw std::runtime_error("Concurrent node read changed truth");
+                    if(not manager.low(xy).is_false())
+                        throw std::runtime_error("Concurrent low cofactor changed");
+                    if(manager.high(xy)!=y)
+                        throw std::runtime_error("Concurrent high cofactor changed");
+                    auto const snapshot=manager.statistics();
+                    if(snapshot.unique_table_entries!=snapshot.node_count)
+                        throw std::runtime_error(
+                            "Manager snapshot observed partial canonical insertion");
+                    if(manager.top_variable(xy)->index()!=0u)
+                        throw std::runtime_error("Concurrent root variable changed");
+                }
+            }));
+        }
+        for(auto& future:futures) future.get();
+
+        auto const final_stats=manager.statistics();
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            final_stats.unique_table_entries,final_stats.node_count);
+        ARIADNE_TESTING_PROVE(manager.evaluate(xy,assignment));
+        for(SizeType writer=0u;writer<4u;++writer)
+            for(SizeType i=0u;i<256u;++i)
+                ARIADNE_TESTING_PROVE(
+                    manager.top_variable(manager.variable(2u+writer*256u+i))
+                        ->index()==2u+writer*256u+i);
+    }
+
     void test_concurrent_canonical_construction() {
         auto& thread_manager = ThreadManager::instance();
         SizeType maximum = thread_manager.maximum_concurrency();
@@ -981,6 +1046,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_statistics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_node_readers_during_concurrent_growth);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
