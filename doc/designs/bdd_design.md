@@ -1514,3 +1514,44 @@ workloads. Further work should investigate the ITE cache hot
 path, overhead and read-access costs through controlled
 experiments rather than adding unverified lock partitions.
 No benchmark is executed in CI and no workflow is modified.
+
+
+### 2026-11-09 - ITE batched cache/operand snapshot under the original mutex
+
+Replaced repeated node reads in serial and parallel ITE recursion
+with one private, value-only `IteStep` produced under the
+original manager mutex. On a computed-cache miss, the helper
+copies at most three operand nodes once, computes the common
+top variable and complementary low/high cofactors, then
+releases the lock before recursion and fork/join. On a cache
+hit no node is read. The subsequent canonical node insertion
+and computed-table insertion preserve their existing locks.
+
+The ordinary `ite()` and explicit `ite_parallel()` share
+this helper. The instrumented `ite_profiled()` now invokes
+the same unlocked helper **only while holding its diagnostic
+manager-lock guard**, ensuring its counters describe the new
+algorithm. `node_snapshot_reads` counts operand copies;
+the previously separate node mutex attempts are now zero.
+The cache-lock diagnostic category includes both computed
+lookup and node snapshots, so previous lock-wait subcategories
+are not comparable. The lock is never held during recursion,
+task scheduling or a call to `_make_node`.
+
+Thread safety is preserved by the original single mutex: vector
+reads occur before releasing it, while concurrent insertions
+are excluded. No raw node pointers are stored or exported.
+Added exhaustive Boolean equivalence for serial/parallel
+and serial-first/parallel-first cache population across
+complemented edges, skipped variables and terminals; prior
+concurrent growth/reads and canonical-construction tests
+remain in place.
+
+This is an **unmeasured optimization candidate** until manual
+Release timings are repeated. Run the standard cold-cache
+benchmark at bits 8/10/12 and concurrency 0/1/2/4/8,
+and compare absolute medians, not only relative speedups.
+The previous version used six or more mutex acquisitions
+per nontrivial ITE; the batched helper needs one for the
+lookup/decomposition, plus canonical and cache insertion.
+No timing experiment is run in CI.

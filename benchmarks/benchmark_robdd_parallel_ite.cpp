@@ -164,6 +164,7 @@ void profile_ite(unsigned bits,SizeType concurrency,bool parallel,
             <<" calls="<<counters.calls
             <<" cache_lookups="<<counters.cache_lookups
             <<" cache_hits="<<counters.cache_hits
+            <<" node_snapshot_reads="<<counters.node_snapshot_reads
             <<" raced_cache_inserts="<<counters.cache_raced_inserts
             <<" lock_calls="<<lock_calls
             <<" lock_contentions="<<lock_contentions

@@ -191,3 +191,23 @@ values and the lock-wait caveats.
 Neither the default serial `ite()` nor the experimental
 `ite_parallel()` should be regarded as improved by this discarded
 experiment. No benchmark executes in CI.
+
+
+### Batched ITE cache and cofactor snapshot (2026-11-09)
+
+`RobddManager::ite()` and `ite_parallel()` now consult the
+computed cache and snapshot all nonterminal operand nodes
+under **one acquisition of the original single manager mutex**.
+Top-variable selection and both cofactor pairs reuse these
+immutable copied values; no lock is held during recursion or
+task join. All canonical allocation and cache publication
+remain synchronized by the same mutex, retaining thread safety.
+
+The diagnostic API measures this same batched path, and the
+new `node_snapshot_reads` output counts copied operand nodes.
+Legacy separate-node-lock diagnostic metrics are zero for
+this path; pre-change per-category lock counts must not be
+compared directly. This is an experiment, **not yet a proven
+speedup**: rerun the manual Release benchmark and check
+both sequential and opt-in parallel timings. Correctness
+tests and sanitizers run in CI, but performance benchmarks do not.

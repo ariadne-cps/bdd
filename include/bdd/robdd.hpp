@@ -86,6 +86,9 @@ struct RobddIteProfile {
     SizeType cache_raced_inserts=0u;
     SizeType cache_lock_calls=0u;
     SizeType cache_lock_contended=0u;
+    // Operand values copied by the batched cache+node snapshot.
+    SizeType node_snapshot_reads=0u;
+    // Legacy separate-node-lock metrics remain zero for batched ITE.
     SizeType node_lock_calls=0u;
     SizeType node_lock_contended=0u;
     SizeType unique_lock_calls=0u;
@@ -105,6 +108,7 @@ struct RobddIteProfile {
         cache_raced_inserts+=child.cache_raced_inserts;
         cache_lock_calls+=child.cache_lock_calls;
         cache_lock_contended+=child.cache_lock_contended;
+        node_snapshot_reads+=child.node_snapshot_reads;
         node_lock_calls+=child.node_lock_calls;
         node_lock_contended+=child.node_lock_contended;
         unique_lock_calls+=child.unique_lock_calls;
@@ -345,10 +349,6 @@ class RobddManager {
     NodeRef _ite_parallel(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch,
         unsigned forks_remaining);
-    Node _node_profiled(NodeRef ref,RobddIteProfile& counters) const;
-    SizeType _top_variable_profiled(NodeRef ref,RobddIteProfile& counters) const;
-    std::pair<NodeRef,NodeRef> _cofactor_profiled(
-        NodeRef ref,SizeType variable,RobddIteProfile& counters) const;
     NodeRef _make_node_profiled(
         BddVariable variable,NodeRef low,NodeRef high,RobddIteProfile& counters);
     NodeRef _ite_profiled(

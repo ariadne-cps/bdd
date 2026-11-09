@@ -755,35 +755,6 @@ class IteProfileLock {
 
 } // namespace
 
-RobddManager::Node RobddManager::_node_profiled(
-        NodeRef ref,RobddIteProfile& counters) const {
-    IteProfileLock lock(
-        _mutex,counters.node_lock_calls,counters.node_lock_contended,
-        counters.node_lock_wait_ns);
-    return _nodes[_node_index(ref)];
-}
-
-SizeType RobddManager::_top_variable_profiled(
-        NodeRef ref,RobddIteProfile& counters) const {
-    if(_is_terminal(ref)) return std::numeric_limits<SizeType>::max();
-    return _node_profiled(ref,counters).variable.index();
-}
-
-std::pair<RobddManager::NodeRef,RobddManager::NodeRef>
-RobddManager::_cofactor_profiled(
-        NodeRef ref,SizeType variable,RobddIteProfile& counters) const {
-    if(_is_terminal(ref)) return {ref,ref};
-    Node node=_node_profiled(ref,counters);
-    if(node.variable.index()!=variable) return {ref,ref};
-    NodeRef low=node.low;
-    NodeRef high=node.high;
-    if(_is_complemented(ref)) {
-        low=_negate(low);
-        high=_negate(high);
-    }
-    return {low,high};
-}
-
 RobddManager::NodeRef RobddManager::_make_node_profiled(
         BddVariable variable,NodeRef low,NodeRef high,
         RobddIteProfile& counters) {
@@ -826,49 +797,51 @@ RobddManager::NodeRef RobddManager::_ite_profiled(
 
     IteKey key(condition,then_branch,else_branch);
     ++counters.cache_lookups;
+    IteStep step;
     {
+        // This one measured critical section matches the production
+        // cache lookup AND node/cofactor snapshot exactly.
         IteProfileLock lock(
             _mutex,counters.cache_lock_calls,counters.cache_lock_contended,
             counters.cache_lock_wait_ns);
-        auto found=_ite_cache.find(key);
-        if(found!=_ite_cache.end()) {
-            ++counters.cache_hits;
-            return found->second;
-        }
+        step=_ite_lookup_split_unlocked(condition,then_branch,else_branch);
     }
-
-    SizeType const variable=std::min(
-        _top_variable_profiled(condition,counters),
-        std::min(_top_variable_profiled(then_branch,counters),
-                 _top_variable_profiled(else_branch,counters)));
-    auto cc=_cofactor_profiled(condition,variable,counters);
-    auto tc=_cofactor_profiled(then_branch,variable,counters);
-    auto ec=_cofactor_profiled(else_branch,variable,counters);
+    if(step.cached) {
+        ++counters.cache_hits;
+        return step.cached_result;
+    }
+    counters.node_snapshot_reads+=
+        static_cast<SizeType>(not _is_terminal(condition))
+        +static_cast<SizeType>(not _is_terminal(then_branch))
+        +static_cast<SizeType>(not _is_terminal(else_branch));
 
     NodeRef low;
     NodeRef high;
     if(forks_remaining==0u) {
-        low=_ite_profiled(cc.first,tc.first,ec.first,counters,0u);
-        high=_ite_profiled(cc.second,tc.second,ec.second,counters,0u);
+        low=_ite_profiled(
+            step.condition.first,step.then_branch.first,step.else_branch.first,
+            counters,0u);
+        high=_ite_profiled(
+            step.condition.second,step.then_branch.second,step.else_branch.second,
+            counters,0u);
     } else {
-        // Exclusive per-task counters: no global atomic accumulation in
-        // inner loops. Merge child metrics only after the task is joined.
         RobddIteProfile high_counters;
         TaskGroup<ThreadManager> tasks(ThreadManager::instance());
         auto const submit_start=IteProfileClock::now();
         auto right=tasks.fork(
-            [this,cc,tc,ec,forks_remaining,&high_counters,submit_start] {
+            [this,step,forks_remaining,&high_counters,submit_start] {
                 high_counters.task_start_delay_ns+=ite_profile_nanoseconds(
                     IteProfileClock::now()-submit_start);
                 return _ite_profiled(
-                    cc.second,tc.second,ec.second,
+                    step.condition.second,step.then_branch.second,step.else_branch.second,
                     high_counters,forks_remaining-1u);
             });
         ++counters.tasks_forked;
         counters.task_submit_ns+=ite_profile_nanoseconds(
             IteProfileClock::now()-submit_start);
         low=_ite_profiled(
-            cc.first,tc.first,ec.first,counters,forks_remaining-1u);
+            step.condition.first,step.then_branch.first,step.else_branch.first,
+            counters,forks_remaining-1u);
         auto const join_start=IteProfileClock::now();
         high=right.get();
         counters.task_join_ns+=ite_profile_nanoseconds(
@@ -878,7 +851,7 @@ RobddManager::NodeRef RobddManager::_ite_profiled(
     }
 
     NodeRef const result=_make_node_profiled(
-        BddVariable(variable),low,high,counters);
+        BddVariable(step.variable),low,high,counters);
     {
         IteProfileLock lock(
             _mutex,counters.cache_lock_calls,counters.cache_lock_contended,

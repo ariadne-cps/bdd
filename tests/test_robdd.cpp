@@ -861,6 +861,53 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_batched_ite_cache_and_complement_semantics() {
+        ThreadManager& threading=ThreadManager::instance();
+        struct Restore {
+            ThreadManager& manager;
+            SizeType previous;
+            ~Restore() noexcept {
+                try { manager.set_concurrency(previous); } catch (...) { }
+            }
+        };
+        Restore restore{threading,threading.concurrency()};
+        threading.set_concurrency(
+            threading.maximum_concurrency()>=2u ? 2u : 0u);
+        for(unsigned first=0u;first<2u;++first) {
+            RobddManager manager;
+            auto f=manager.constant(false);
+            auto t=manager.constant(true);
+            auto x=manager.variable(0u);
+            auto y=manager.variable(2u);
+            auto z=manager.variable(4u);
+            auto xy=manager.exclusive_or(x,y);
+            std::vector<Robdd> choices{f,t,x,y,z,manager.negation(x),
+                manager.negation(y),manager.negation(z),xy,
+                manager.negation(xy)};
+            for(auto const& c:choices)
+                for(auto const& a:choices)
+                    for(auto const& b:choices) {
+                        Robdd lhs=first==0u
+                            ? manager.ite(c,a,b)
+                            : manager.ite_parallel(c,a,b);
+                        Robdd rhs=first==0u
+                            ? manager.ite_parallel(c,a,b)
+                            : manager.ite(c,a,b);
+                        ARIADNE_TESTING_PROVE(lhs==rhs);
+                        for(SizeType mask=0u;mask<32u;++mask) {
+                            BinaryWord word;
+                            for(unsigned bit=0u;bit<5u;++bit)
+                                word.push_back(((mask>>bit)&1u)!=0u);
+                            Bool expected=manager.evaluate(c,word)
+                                ? manager.evaluate(a,word)
+                                : manager.evaluate(b,word);
+                            ARIADNE_TESTING_EXPECT_EQUAL(
+                                manager.evaluate(lhs,word),expected);
+                        }
+                    }
+        }
+    }
+
     void test_ite_profiled_diagnostics() {
         struct Restore {
             ThreadManager& manager;
@@ -891,6 +938,9 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
             ARIADNE_TESTING_PROVE(counters.calls>0u);
             ARIADNE_TESTING_PROVE(
                 counters.cache_lock_calls>=counters.cache_lookups);
+            ARIADNE_TESTING_EXPECT_EQUAL(counters.node_lock_calls,0u);
+            ARIADNE_TESTING_PROVE(
+                counters.node_snapshot_reads<=3u*counters.cache_lookups);
             ARIADNE_TESTING_PROVE(
                 counters.cache_lock_contended<=counters.cache_lock_calls);
             ARIADNE_TESTING_PROVE(
@@ -1049,5 +1099,6 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_node_readers_during_concurrent_growth);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_batched_ite_cache_and_complement_semantics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
 }
