@@ -132,6 +132,59 @@ Result measure(unsigned bits,bool parallel,unsigned samples,
         expected_nodes.value_or(0u)};
 }
 
+// A SECOND, UNTIMED diagnostic experiment. Instrumentation perturbs the
+// ITE and must never contribute to Runner's performance samples.
+void profile_ite(unsigned bits,SizeType concurrency,bool parallel,
+                 unsigned repetitions) {
+    std::string const method=parallel ? "parallel" : "serial";
+    for(unsigned repeat=0u;repeat<repetitions;++repeat) {
+        Sample sample(bits); // Same fresh/cold ITE setup as measured samples.
+        RobddIteProfile counters;
+        sample.result.emplace(sample.manager.ite_profiled(
+            *sample.condition,*sample.then_branch,*sample.else_branch,
+            parallel,counters));
+        verify(sample,bits); // All assignments and canonical identity.
+
+        std::uint64_t const lock_wait_ns=
+            counters.cache_lock_wait_ns
+            +counters.node_lock_wait_ns
+            +counters.unique_lock_wait_ns;
+        SizeType const lock_contentions=
+            counters.cache_lock_contended
+            +counters.node_lock_contended
+            +counters.unique_lock_contended;
+        SizeType const lock_calls=
+            counters.cache_lock_calls
+            +counters.node_lock_calls
+            +counters.unique_lock_calls;
+        LOGGING_PRINTLN("ROBDD_ITE_PROFILE bits="<<bits
+            <<" concurrency="<<concurrency
+            <<" method="<<method
+            <<" repeat="<<repeat
+            <<" calls="<<counters.calls
+            <<" cache_lookups="<<counters.cache_lookups
+            <<" cache_hits="<<counters.cache_hits
+            <<" raced_cache_inserts="<<counters.cache_raced_inserts
+            <<" lock_calls="<<lock_calls
+            <<" lock_contentions="<<lock_contentions
+            <<" lock_wait_ns_sum="<<lock_wait_ns
+            <<" cache_lock_calls="<<counters.cache_lock_calls
+            <<" cache_lock_contended="<<counters.cache_lock_contended
+            <<" cache_lock_wait_ns="<<counters.cache_lock_wait_ns
+            <<" node_lock_calls="<<counters.node_lock_calls
+            <<" node_lock_contended="<<counters.node_lock_contended
+            <<" node_lock_wait_ns="<<counters.node_lock_wait_ns
+            <<" unique_lock_calls="<<counters.unique_lock_calls
+            <<" unique_lock_contended="<<counters.unique_lock_contended
+            <<" unique_lock_wait_ns="<<counters.unique_lock_wait_ns
+            <<" tasks_forked="<<counters.tasks_forked
+            <<" task_submit_ns_sum="<<counters.task_submit_ns
+            <<" task_join_ns_sum="<<counters.task_join_ns
+            <<" task_start_delay_ns_sum="<<counters.task_start_delay_ns
+            <<" nodes="<<sample.manager.node_count())
+    }
+}
+
 void print_report(std::vector<Result> const& results,
                   Bench::CommandLine const& cli) {
     Bench::Report report(
@@ -181,6 +234,7 @@ void print_report(std::vector<Result> const& results,
 int main(int argc,char const* argv[]) {
     try {
         unsigned samples=7u;
+        unsigned profile_samples=1u;
         ThreadManager& threading=ThreadManager::instance();
         Bench::Parameter<unsigned> bits(
             "bits","Number of Boolean variables, 2..14",
@@ -211,6 +265,14 @@ int main(int argc,char const* argv[]) {
                     if(count==0u)
                         throw std::invalid_argument("samples must be positive");
                     return [&samples,count] {samples=count;};
+                }),
+            make_valued_argument_parser(
+                "","profile-samples",
+                "Separate untimed instrumentation runs per method/configuration"
+                " (default: 1, 0 disables)",
+                [&profile_samples](String const& token)->VoidFunction {
+                    unsigned count=Bench::parse_unsigned<unsigned>(token);
+                    return [&profile_samples,count] {profile_samples=count;};
                 })
         }));
         if(not cli.acquire(argc,argv)) return 0;
@@ -236,6 +298,13 @@ int main(int argc,char const* argv[]) {
             results.push_back(std::move(serial));
             results.push_back(measure(number_bits,true,samples,runner,baseline_ns));
             runner.configuration_completed(configuration);
+
+            // Run diagnostics AFTER both uninstrumented timing series.
+            // Use fresh managers again to preserve cold-cache semantics.
+            if(profile_samples>0u) {
+                profile_ite(number_bits,workers,false,profile_samples);
+                profile_ite(number_bits,workers,true,profile_samples);
+            }
         });
         print_report(results,cli);
         return 0;

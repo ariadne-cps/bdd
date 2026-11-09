@@ -1350,3 +1350,46 @@ proofs of canonicality, deadlock freedom and task ownership.
 
 No performance benchmark is executed in CI, and no CI workflow
 is changed in this documentation-only update.
+
+
+### 2026-11-09 - Separate instrumented profiling pass for ITE regressions
+
+Added the explicit diagnostic API `ite_profiled` with a parallel
+selector and a caller-owned `RobddIteProfile`. It has a dedicated
+recursion, so normal `ite`/`ite_parallel` timings are unaffected
+by counter increments, clock probes or diagnostic lock acquisition.
+It returns a canonical result. The functional regression checks
+manager isolation, canonical equivalence, serial and shared-pool
+parallel execution, ordinary and warm-cache behavior, and
+diagnostic-counter invariants at supported worker counts.
+
+The manual `benchmark_robdd_parallel_ite` now supports
+`--profile-samples` (default one additional run per method and
+configuration; zero disables). These separate, uninstrumented
+`Benchmarking::Runner` time samples **always finish first**.
+Only then do fresh managers and cold-cache inputs run the
+instrumented serial and parallel paths, each followed by full
+truth-table and canonical verification. Their `ROBDD_ITE_PROFILE`
+records include:
+- per-call ITE recursion count and computed-table lookups/hits;
+- cache insertion collisions, a *lower-bound indicator* of
+  concurrent duplicate ITE-key evaluations, not the full cost;
+- separate node, cache and unique-table mutex calls,
+  try-lock contentions and elapsed waiting nanoseconds;
+- spawned task count, submit duration, task start delay and
+  cooperative join waiting duration.
+
+**Interpretation:** the lock-wait timings and lifecycle durations
+are *summed over tasks*, so are not additive to wall time and
+may exceed a single operation's critical path. The clock probes
+and `try_lock` instrumentation themselves perturb contention;
+do **not** compare the diagnostic nanoseconds directly against
+the non-instrumented `Runner` durations or use them as a
+production-speedup estimate. Use counters to identify which
+bottleneck category to investigate, then use an isolated
+benchmark to validate any candidate change.
+
+This update does not change the normal manager algorithm,
+does not auto-parallelize ITE and does not execute performance
+benchmarks from CI. New results are pending the operator's
+manual Release run.

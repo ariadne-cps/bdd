@@ -126,3 +126,43 @@ speedup and efficiency, and machine-readable `ROBDD_PARALLEL_ITE`
 records. Configurations above the machine's concurrency maximum
 are reported as skipped. The experiment is **manual-only**: no
 performance benchmark is executed in CI or registered with CTest.
+
+
+### Manual ITE synchronization and scheduling diagnostics
+
+The optional `RobddManager::ite_profiled(c,t,e,parallel,counters)`
+performs the same Boolean operation as the production paths, but
+collects explicitly **instrumented** per-call counters. The ordinary
+`ite()` and `ite_parallel()` do not execute this instrumented
+recursion and retain their existing hot paths.
+
+`benchmark_robdd_parallel_ite` automatically performs **one
+separate diagnostic sample** for each serial/parallel matrix case,
+after all corresponding uninstrumented performance samples. Use
+`--profile-samples N` to vary this count, or
+`--profile-samples 0` to disable diagnostics. The output lines
+`ROBDD_ITE_PROFILE` report cache hits, raced cache inserts,
+per-category mutex acquisitions/contended acquisitions/estimated
+waiting nanoseconds, task fork counts, submit nanoseconds, join
+waiting nanoseconds and task-start delay nanoseconds.
+
+Each diagnostic sample uses a **new manager with a cold ITE cache**,
+and it independently checks both the canonical result and every
+Boolean assignment. The diagnostic measurements are **not** the
+unmodified algorithm's duration: polling `try_lock()`, reading
+the clock, creating counter storage and instrumenting every
+recursive call affect behavior. Mutex wait, task submit, task
+start delay and join waiting are **sums over possibly overlapping
+threads**, not additive wall-time components. A raced cache
+insertion proves that two computations reached the same ITE key,
+but does not quantify all duplicated subtree work.
+
+Run manually in Release after building the benchmark:
+
+```bash
+./build-release/benchmarks/benchmark_robdd_parallel_ite \
+  --bits 8,10,12 --concurrency 0,1,2,4,8 \
+  --samples 7 --profile-samples 1
+```
+
+No performance benchmark is run as part of CI.
