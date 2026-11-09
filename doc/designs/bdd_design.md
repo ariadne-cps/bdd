@@ -1742,5 +1742,75 @@ time for canonicalization and for cold ITE, followed by
 scheduled/parallel performance and memory tradeoffs.
 ABBA sampling mitigates monotonic environmental drift,
 not all variability; multiple repetitions are appropriate.
-The A/B experiment has **no results yet**. All performance
+The completed A/B experiment is analyzed in the following section. All performance
 benchmarks remain strictly manual, with no CI or CTest runs.
+
+### 2026-11-09 - Measured hash-versus-ordered A/B: retain hashed default
+
+**Input:** operator-supplied `Archivio(20261109-105050).zip`,
+containing the full `20261109T104919Z` ABBA report, both Release
+builds and both `test_robdd` test logs. The manifest identifies
+revision `f6a09cd15947e3672450383d3b0f995dc3eda3a3`,
+macOS arm64, CMake 4.4.2, seven samples and the default matrix.
+The four sequential experiment passes were hash, ordered, ordered,
+hash. All eight logs were parsed, comprising **360 result rows**
+(four passes × 60 canonicalization rows plus 30 ITE rows).
+Both local test suites report **25 passed, 0 failed**.
+CMake caches confirm ORDERED=OFF for hash and ON for map; compile
+flags on `BDD_SRC`, tests and both benchmark programs verify
+the ordered preprocessor definition is applied consistently.
+The five GitHub CI workflows for the A/B code revision succeeded.
+The manifest also reports `git_dirty_files=2` without path names,
+so the working tree was **not certified clean**.
+
+**Results at concurrency 4**, expressed as the median of the two
+per-run medians for each variant. Unique-table units are
+nanoseconds per public `make_node` call; ITE units are
+milliseconds per invocation. Reduction compares hash to ordered.
+
+| Workload | Ordered | Hash | Hash reduction |
+| --- | ---: | ---: | ---: |
+| 256 keys, fresh | 124.838 | 92.447 | 26.0% |
+| 256 keys, existing | 59.082 | 45.084 | 23.7% |
+| 1024 keys, fresh | 87.118 | 65.247 | 25.1% |
+| 1024 keys, existing | 50.862 | 34.932 | 31.3% |
+| 4096 keys, fresh | 86.110 | 54.632 | 36.6% |
+| 4096 keys, existing | 43.386 | 30.736 | 29.2% |
+| ITE 8 variables, serial | 0.018833 | 0.017354 | 7.9% |
+| ITE 10 variables, serial | 0.074458 | 0.063312 | 15.0% |
+| ITE 12 variables, serial | 0.319729 | 0.239604 | 25.1% |
+| ITE 12 variables, parallel | 1.232875 | 0.955812 | 22.5% |
+
+**Repeatability on the larger workloads:** at 4096 keys / four
+workers, hash fresh insertion medians were 54.932 and 54.332
+ns/key, while ordered was 81.614 and 90.607; existing-key
+hash medians were 32.471 and 29.002, versus ordered 42.409
+and 44.362. At 12-bit serial ITE / four workers, hash was
+0.238917 and 0.240292 ms versus ordered 0.321375 and
+0.318083 ms. The larger serial cases show a consistent
+benefit from hash in both passes and across worker counts.
+
+**Caveats:** smaller workloads suffer major order/environment
+drift. For example, 256 fresh keys, concurrency zero: hash
+medians 211.262 and 58.266 ns/key. ABBA reduces simple
+monotonic drift but not nonlinear clock/warmup behavior.
+No confidence interval or statistical significance test was
+computed. No memory-footprint measurement was made; payload
+size excludes bucket/allocator overhead. The dirty working
+tree needs identification before making publication-grade
+claims about an entirely identical checkout.
+
+**Parallel interpretation:** at 12 variables / four workers,
+the hash parallel ITE still needs roughly 3.99× its own
+serial median (0.955812 vs 0.239604 ms). Similarly, scheduled
+fine-grained canonical lookups remain slower than serial.
+Hash lookup accelerates the common serial hot path but does
+not remove task overhead or shared-manager serialization.
+
+**Decision:** keep `std::unordered_map` as the default unique
+table, retaining `ARIADNE_BDD_UNIQUE_TABLE_ORDERED` for future
+controlled comparisons. Preserve the single manager mutex,
+canonicality tests and existing design. Next isolate the ITE
+computed-cache implementation as a separate experiment.
+No code was modified for this result and no performance
+benchmarks have been executed in CI.

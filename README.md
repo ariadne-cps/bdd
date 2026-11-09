@@ -323,3 +323,24 @@ the hash table improves production performance; report scheduled
 and parallel variants separately. ABBA order reduces simple
 run-order bias, but still requires repeated measurements when
 environmental noise is appreciable.
+
+### Measured hash/ordered A/B outcome (2026-11-09)
+
+The operator's complete ABBA archive contains two Release
+measurements per variant. Both test suites passed (25/25)
+and compiler flags verified matching `RobddManager` layout
+through the library and clients. **Hash remains the chosen
+default**: at four configured workers, serial `make_node`
+with 4096 fresh keys improves from 86.11 to 54.63 ns/key
+(36.6%), existing-key lookup improves from 43.39 to
+30.74 ns/key (29.2%), and serial 12-variable ITE improves
+from 0.3197 to 0.2396 ms (25.1%). These are medians
+of two run medians per variant.
+
+This does **not** make fine-grained parallelism profitable:
+parallel 12-variable ITE still takes approximately four
+times its own serial time. The manifest records two dirty
+working-tree entries, and small workloads show large
+environment/order variation. For the individual measurements,
+methodology and caveats, see the design journal.
+No benchmark runs in CI.
