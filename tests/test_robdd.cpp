@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <barrier>
 #include <cstdint>
 #include <future>
 #include <limits>
@@ -948,6 +949,58 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         ARIADNE_TESTING_PROVE(counters.calls>1u);
     }
 
+    void test_ite_profiled_concurrent_cache_publication() {
+        RobddManager manager;
+        // Build the operands through canonical nodes, without populating
+        // the ITE cache that the concurrent calls are about to share.
+        std::uint32_t state=0x9e3779b9u;
+        std::function<Robdd(SizeType)> operand=[&](SizeType index) {
+            if(index==10u) {
+                state^=state<<13u;
+                state^=state>>17u;
+                state^=state<<5u;
+                return manager.constant((state&1u)!=0u);
+            }
+            auto low=operand(index+1u);
+            auto high=operand(index+1u);
+            return manager.make_node(BddVariable(index),low,high);
+        };
+        auto condition=operand(0u);
+        auto then_branch=operand(0u);
+        auto else_branch=operand(0u);
+        constexpr SizeType workers=8u;
+        std::barrier start(static_cast<std::ptrdiff_t>(workers));
+        std::vector<std::future<std::pair<Robdd,RobddIteProfile>>> results;
+        for(SizeType worker=0u;worker<workers;++worker) {
+            results.push_back(std::async(std::launch::async,[&] {
+                RobddIteProfile profile;
+                start.arrive_and_wait();
+                auto result=manager.ite_profiled(
+                    condition,then_branch,else_branch,false,profile);
+                return std::make_pair(result,profile);
+            }));
+        }
+        auto expected=results.front().get().first;
+        for(SizeType worker=1u;worker<workers;++worker) {
+            auto result=results[worker].get();
+            ARIADNE_TESTING_EXPECT_EQUAL(result.first,expected);
+            ARIADNE_TESTING_PROVE(
+                result.second.cache_raced_inserts<=result.second.cache_lookups);
+            ARIADNE_TESTING_PROVE(
+                result.second.cache_lock_contended<=result.second.cache_lock_calls);
+        }
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.ite(condition,then_branch,else_branch),expected);
+        for(SizeType assignment=0u;assignment<1024u;++assignment) {
+            BinaryWord word;
+            for(SizeType variable=0u;variable<10u;++variable)
+                word.append(((assignment>>variable)&1u)!=0u);
+            Bool const truth=manager.evaluate(condition,word)
+                ? manager.evaluate(then_branch,word) : manager.evaluate(else_branch,word);
+            ARIADNE_TESTING_EXPECT_EQUAL(manager.evaluate(expected,word),truth);
+        }
+    }
+
     void test_ite_profiled_diagnostics() {
         struct Restore {
             ThreadManager& manager;
@@ -1197,6 +1250,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_reductions);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_concurrent_cache_publication);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_model_count_skipped_level_overflow);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_batched_ite_cache_and_complement_semantics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
