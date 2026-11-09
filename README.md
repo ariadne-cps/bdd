@@ -269,3 +269,22 @@ Task scheduling is included in `scheduled` timings by design;
 at concurrency zero it falls back to the caller's thread.
 This is manual-only: no performance experiment is registered
 with CTest or executed in CI.
+
+#### Initial unique-table benchmark findings (2026-11-09)
+
+The first manual hash-table benchmark, at 256/1024/4096 keys
+and concurrency 0/1/2/4/8, preserved the expected canonical
+node counts, but the shared-manager scheduled workload was
+slower than serial by 3.46–5.33x with 4 workers and up to
+6.72x with 8 workers. **This is a concurrency comparison
+within the hash implementation, not a hash-versus-map result.**
+The manager still uses one mutex, and work distribution and
+future waits are included in the measured scheduled region.
+
+Before concluding whether the hash table improves performance,
+replay the **same benchmark** with the prior ordered-map
+container, identical toolchain and input keys, and also
+compare the existing end-to-end ITE benchmark across the
+two builds. The old code predates this dedicated executable
+and requires a comparable benchmark port or isolated
+container-only A/B. All timing remains manual.

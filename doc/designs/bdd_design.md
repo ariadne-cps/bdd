@@ -1629,3 +1629,78 @@ because it combines canonicalization with recursion, computed
 cache and DAG access. No performance results have been
 recorded for the hash-table variant yet. All timing runs
 remain manual and out of CI.
+
+### 2026-11-09 - Measured hash unique-table hit/miss: concurrent manager saturation
+
+**Operator-supplied manual Release output** of
+`benchmark_robdd_unique_table --keys 256,1024,4096
+--concurrency 0,1,2,4,8 --samples 7` on the hash-table
+implementation from `daf8b4d9`/`f4d3e721`. Each timed
+sample executes N public `make_node` calls on one canonical
+manager: `fresh` creates N new distinct nodes and `existing`
+looks up N previously interned nodes. `scheduled` includes
+task enqueue and future synchronization and is **not** a
+direct comparison of raw hash operations. All returned node
+counts were N+2 and matched the unique-table counts: no
+canonicality regression was observed by this benchmark.
+
+Median **nanoseconds per public `make_node` call**; ratios are
+scheduled/serial time for the same workload/configuration
+(>1 means scheduled is slower):
+
+| Keys | Concurrency | Fresh serial | Fresh scheduled | Fresh ratio | Existing serial | Existing scheduled | Existing ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 | 0 | 172.53 | 156.25 | 0.91x | 78.61 | 77.80 | 0.99x |
+| 256 | 1 | 153.32 | 236.65 | 1.54x | 62.66 | 128.91 | 2.06x |
+| 256 | 2 | 122.88 | 330.08 | 2.69x | 62.66 | 194.01 | 3.10x |
+| 256 | 4 | 112.63 | 499.67 | 4.44x | 63.64 | 339.36 | 5.33x |
+| 256 | 8 | 97.17 | 640.14 | 6.59x | 53.71 | 360.84 | 6.72x |
+| 1024 | 0 | 96.56 | 96.19 | 1.00x | 55.22 | 55.26 | 1.00x |
+| 1024 | 1 | 93.30 | 103.88 | 1.11x | 47.69 | 61.04 | 1.28x |
+| 1024 | 2 | 82.84 | 197.79 | 2.39x | 47.65 | 111.69 | 2.34x |
+| 1024 | 4 | 82.89 | 325.44 | 3.93x | 42.64 | 191.65 | 4.49x |
+| 1024 | 8 | 73.81 | 407.92 | 5.53x | 39.18 | 172.69 | 4.41x |
+| 4096 | 0 | 72.72 | 69.61 | 0.96x | 39.31 | 37.25 | 0.95x |
+| 4096 | 1 | 63.13 | 72.21 | 1.14x | 36.83 | 38.85 | 1.05x |
+| 4096 | 2 | 59.77 | 132.23 | 2.21x | 33.70 | 67.37 | 2.00x |
+| 4096 | 4 | 55.22 | 216.85 | 3.93x | 32.07 | 110.85 | 3.46x |
+| 4096 | 8 | 52.69 | 272.32 | 5.17x | 28.54 | 103.94 | 3.64x |
+
+**Interpretation:** concurrent calls against one manager are
+unattractive at this granularity (4-worker slowdowns
+3.46–5.33x; 8-worker slowdowns up to 6.72x).
+The manager still holds one mutex around canonical lookup
+and insertion, so distributing such fine-grained calls
+does not remove serialization; scheduling and contention
+provide plausible additional costs. This does **not**
+establish that the new hash table is faster or slower than
+the old ordered map: both serial and scheduled data in this
+matrix come exclusively from the hash-table build.
+The absolute serial nanoseconds per key also vary with the
+nominal worker-pool configuration (even though `serial`
+executes on the caller), illustrating order, clock,
+cache and environment confounding. A comparison of
+relative speedups within this matrix cannot substitute
+for a controlled old-map/new-hash A/B.
+
+**Next experiment, preserving thread safety:**
+compare the two unique-table container implementations
+under the *same* standalone benchmark source, compiler,
+Release options, and key distributions, with interleaved
+or repeated runs and order reversal. The historical ordered-map
+commit predates this dedicated benchmark; therefore simply
+building that old commit will **not** provide the same executable.
+A clean temporary working-tree copy with only the container
+definition changed, or an explicit compile-time selection
+propagated consistently to all translation units, is needed.
+Keep the existing single mutex and correctness/sanitizer
+checks. Do not promote a lock-free design or remove the
+hash implementation based solely on these numbers.
+
+Also run the established cold-cache serial/parallel ITE
+benchmark on the hash build: `make_node` throughput alone
+cannot predict full ITE performance. Neither benchmark is
+executed in CI. The latest hash-table commit's five regular
+CI workflows (Ubuntu, macOS, Windows, Sanitizers, Coverage)
+all completed successfully; this is useful correctness
+evidence, not a proof against every possible concurrent race.
