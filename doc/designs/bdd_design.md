@@ -1437,3 +1437,80 @@ proof. Re-run the existing manual Benchmarking matrix with the same
 bits/concurrency/samples and compare both serial and parallel
 medians against the pre-change results. Performance benchmarks are
 not run in CI.
+
+
+### 2026-11-09 - Shared-node-lock benchmark regression; restore the original mutex
+
+**Operator's manual Release comparison** of the previous single-mutex
+manager versus the separate `std::shared_mutex` for physical nodes,
+using `benchmark_robdd_parallel_ite`, 7 measured samples,
+fresh-manager cold-cache ITE, and the same 8/10/12-bit and
+0/1/2/4/8-concurrency matrix. All values below are measured median
+**milliseconds**, not inferred or simulated durations. Positive
+percentages are regressions (larger durations).
+
+| Bits | Concurrency | Serial before | Serial shared-node | Serial change | Parallel before | Parallel shared-node | Parallel change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 | 0 | 0.040459 | 0.069083 | +70.7% | 0.031334 | 0.052417 | +67.3% |
+| 8 | 1 | 0.043333 | 0.057792 | +33.4% | 0.030583 | 0.050208 | +64.2% |
+| 8 | 2 | 0.047334 | 0.059708 | +26.1% | 0.137834 | 0.229125 | +66.2% |
+| 8 | 4 | 0.027125 | 0.047459 | +75.0% | 0.135917 | 0.231709 | +70.5% |
+| 8 | 8 | 0.030000 | 0.037292 | +24.3% | 0.194875 | 0.207541 | +6.5% |
+| 10 | 0 | 0.125667 | 0.190666 | +51.7% | 0.115875 | 0.149625 | +29.1% |
+| 10 | 1 | 0.113542 | 0.153375 | +35.1% | 0.110375 | 0.139583 | +26.5% |
+| 10 | 2 | 0.115708 | 0.130167 | +12.5% | 0.751708 | 0.539292 | -28.3% |
+| 10 | 4 | 0.099375 | 0.129458 | +30.3% | 0.398458 | 0.557625 | +39.9% |
+| 10 | 8 | 0.091458 | 0.107459 | +17.5% | 0.442708 | 0.508875 | +14.9% |
+| 12 | 0 | 0.416208 | 0.517625 | +24.4% | 0.419250 | 0.481375 | +14.8% |
+| 12 | 1 | 0.386833 | 0.460416 | +19.0% | 0.387833 | 0.441292 | +13.8% |
+| 12 | 2 | 0.374333 | 0.459792 | +22.8% | 2.613083 | 2.411333 | -7.7% |
+| 12 | 4 | 0.370750 | 0.460500 | +24.2% | 1.399542 | 2.151583 | +53.7% |
+| 12 | 8 | 0.379250 | 0.482959 | +27.3% | 1.598334 | 2.204542 | +37.9% |
+
+At 12 bits and four workers, serial changed from 0.370750 ms
+to 0.460500 ms (+24.2%), while parallel changed from 1.399542
+to 2.151583 ms (+53.7%). At 8 bits / four workers, serial
+regressed by ~75% and parallel by ~70%; at 10 bits / four workers,
+serial regressed ~30% and parallel ~40%. Results are separate
+runs on the operator's hardware: runtime conditions and sample
+order remain possible confounders. Isolated exceptions exist
+(e.g. 10/12 bits at two workers saw faster parallel medians)
+but the overall effect is consistently unfavorable, especially
+for the sequential operation that must not be sacrificed.
+
+**Diagnostic analysis (12 bits / four workers):** before the
+change, profiling recorded 552 contended lock acquisitions and
+4,600,117 ns of *summed* lock wait (node 2,053,039 ns, cache
+1,742,994 ns, unique 804,084 ns). With the shared-node lock,
+the profile recorded 431 contended acquisitions but **7,296,241 ns**
+summed lock wait (node 1,171,498 ns, cache 4,527,196 ns,
+unique 1,597,547 ns). Reduced node wait did **not** reduce
+overall contention, and serial timings worsened. The new node
+acquisition counters also include exclusive node *writes*, unlike
+the old shared-mutex-free diagnostic path, so raw counts
+10,278 vs 10,774 are not strictly comparable. All recorded
+waits come from instrumented code on possibly overlapping
+threads: never equate their sum to wall time or prove
+causality by subtraction.
+
+**Decision and exact restoration:** revert both production
+`include/bdd/robdd.hpp` and `src/robdd.cpp` to their complete
+contents at commit `165cf81e850aaeeeff6f23c0675c3b45a227e16e`,
+immediately before the node-lock experiment, restoring the
+single manager `std::mutex` for all nodes and tables and
+the original profiling lock behavior. Retain the new
+`test_node_readers_during_concurrent_growth` regression from
+the experiment: it checks simultaneous canonical insertions,
+node reads, Boolean evaluations and coherent statistics, and is
+valid under the original serialization policy.
+
+This is **not** an assertion that thread safety was ever
+compromised: it was required throughout, and the revert returns
+to the simpler already exercised synchronization model.
+Re-run regular build/tests and ThreadSanitizer after the revert
+before declaring the new tip validated. Existing ITE parallelism
+remains opt-in and is still slower than serial for the tested
+workloads. Further work should investigate the ITE cache hot
+path, overhead and read-access costs through controlled
+experiments rather than adding unverified lock partitions.
+No benchmark is executed in CI and no workflow is modified.

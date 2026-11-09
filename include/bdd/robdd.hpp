@@ -20,7 +20,6 @@
 #include <functional>
 #include <map>
 #include <mutex>
-#include <shared_mutex>
 #include <cstdint>
 #include <set>
 #include <optional>
@@ -342,12 +341,7 @@ class RobddManager {
         RobddIteProfile& counters,unsigned forks_remaining);
 
   private:
-    // Lock hierarchy: _mutex (canonical unique table / ITE cache)
-    // precedes _nodes_mutex whenever both must be acquired. Node readers
-    // acquire only the shared node lock, never _mutex while holding it.
-    // Both locks protect the *entire* vector relocation/insertion path.
     mutable std::mutex _mutex;
-    mutable std::shared_mutex _nodes_mutex;
     std::vector<Node> _nodes;
     std::map<NodeKey,NodeRef> _unique_table;
     std::map<IteKey,NodeRef> _ite_cache;
