@@ -1555,3 +1555,47 @@ The previous version used six or more mutex acquisitions
 per nontrivial ITE; the batched helper needs one for the
 lookup/decomposition, plus canonical and cache insertion.
 No timing experiment is run in CI.
+
+
+### 2026-11-09 - First Sylvan-inspired experiment: hash canonical unique table
+
+**Hypothesis:** the RB-tree search/insertion and pointer chasing of
+`std::map<NodeKey,NodeRef>` may waste CPU in canonical node
+lookup. Change only the canonical **unique table** to
+`std::unordered_map<NodeKey,NodeRef,NodeKeyHash>`; leave the
+computed ITE cache as `std::map`, preserving the first experiment
+as an isolated change. The key is the exact three-component tuple:
+variable index, regular low reference, high reference (including
+complement polarity). The custom hasher combines the hashes of
+all three fields; even if distinct keys collide in a hash bucket,
+`unordered_map` performs full tuple equality before matching.
+No probabilistic canonicality is introduced.
+
+**Thread safety:** the manager's original `std::mutex` remains
+held across both `find` and `emplace`, including rehashing,
+node allocation, and computed-cache operations. No iterator or
+pointer into the table is exposed or used after releasing the
+manager lock. The complement-edge normalization and node
+reference encoding are unchanged. The previous multi-thread
+canonical construction and concurrent vector-growth/reads
+regressions remain enabled. An additional regression schedules
+eight independent writers on the same manager, repeatedly
+building overlapping sets of 128 decision-node keys in both
+low/high orders and their complemented equivalents. The expected
+physical node and unique-table counts are identical: two terminal
+variable nodes plus 256 genuinely different decision nodes.
+Repeat construction after joining ensures no accidental duplicate
+allocation.
+
+**Measurement:** the existing manual Benchmarking cold-cache ITE
+matrix is a valid end-to-end workload for the unique-table change,
+but it also measures ITE cache work, recursion and allocation.
+Compare its absolute serial and parallel medians against the
+prior commit, not only the ratio. Inspect `RobddManagerStatistics`
+carefully: the `unique_table_entry_payload_bytes` field uses
+`sizeof(container::value_type)` and is exact, but excludes
+hash buckets and allocator overhead, so it is not total memory.
+A dedicated manual hit/miss canonicalization benchmark would
+help attribute effects to the table itself. This patch makes
+no claim of measured speedup, and benchmark performance
+experiments are **never run in CI**.

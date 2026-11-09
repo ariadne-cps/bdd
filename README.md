@@ -211,3 +211,27 @@ compared directly. This is an experiment, **not yet a proven
 speedup**: rerun the manual Release benchmark and check
 both sequential and opt-in parallel timings. Correctness
 tests and sanitizers run in CI, but performance benchmarks do not.
+
+
+### Unique-table hash experiment (2026-11-09)
+
+The canonical unique table now uses
+`std::unordered_map<NodeKey,NodeRef,NodeKeyHash>` instead of
+`std::map<NodeKey,NodeRef>`. The key is still the full tuple
+(variable index, low reference, high reference); hash collisions
+are resolved by exact tuple equality and cannot merge distinct
+decision nodes. The existing **single manager mutex** still
+serializes every unique-table lookup, insertion and rehash, as
+well as node vector and ITE cache access. Complement-edge
+normalization and the canonical node allocation policy are
+unchanged.
+
+This is a controlled experiment inspired by hash-based canonical
+tables in multicore ROBDD libraries, **not** a lock-free or
+fully scalable table. The hash container has bucket allocations,
+different locality and distinct memory overhead; speedup and
+memory savings are not assumed. The existing ITE benchmark
+provides a first end-to-end check. An additional targeted
+canonical-node benchmark can isolate table hit/miss throughput.
+All performance benchmarks remain manual; regular correctness
+tests and sanitizers may run in CI.

@@ -1033,6 +1033,62 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
                         ->index()==2u+writer*256u+i);
     }
 
+    void test_hashed_unique_table_concurrent_canonicality() {
+        auto& threading=ThreadManager::instance();
+        SizeType const max_workers=threading.maximum_concurrency();
+        // The same canonical keys are submitted simultaneously from
+        // independent workers; no duplicate nodes may be allocated.
+        struct RestoreConcurrency {
+            ThreadManager& manager;
+            SizeType previous;
+            ~RestoreConcurrency() noexcept {
+                try { manager.set_concurrency(previous); } catch (...) { }
+            }
+        };
+        RestoreConcurrency restore{threading,threading.concurrency()};
+        if(max_workers>=2u)
+            threading.set_concurrency(std::min<SizeType>(4u,max_workers));
+        else threading.set_concurrency(0u);
+
+        RobddManager manager;
+        Robdd const low=manager.variable(512u);
+        Robdd const high=manager.variable(513u);
+        Robdd const complement_low=manager.negation(low);
+        Robdd const complement_high=manager.negation(high);
+
+        // Collision safety and canonicality depend on the full tuple
+        // (variable index, low ref, high ref), including complement bits.
+        std::vector<std::future<void>> futures;
+        for(unsigned worker=0u;worker<8u;++worker) {
+            futures.push_back(threading.enqueue([&manager,low,high,
+                                                complement_low,complement_high] {
+                for(SizeType i=0u;i<128u;++i) {
+                    auto a=manager.make_node(BddVariable(i),low,high);
+                    auto b=manager.make_node(BddVariable(i),high,low);
+                    auto c=manager.make_node(
+                        BddVariable(i),complement_low,complement_high);
+                    if(c!=manager.negation(a) or a==b)
+                        throw std::runtime_error("Hashed unique table lost canonicality");
+                }
+            }));
+        }
+        for(auto& f:futures) f.get();
+
+        auto const stats=manager.statistics();
+        ARIADNE_TESTING_EXPECT_EQUAL(stats.node_count,258u);
+        ARIADNE_TESTING_EXPECT_EQUAL(stats.unique_table_entries,258u);
+        // Reconstruct every key again: repeated insertion must not
+        // allocate anything and returned handles must stay canonical.
+        for(SizeType i=0u;i<128u;++i) {
+            auto a=manager.make_node(BddVariable(i),low,high);
+            auto b=manager.make_node(BddVariable(i),high,low);
+            ARIADNE_TESTING_PROVE(a!=b);
+            ARIADNE_TESTING_PROVE(manager.negation(a)==manager.make_node(
+                BddVariable(i),complement_low,complement_high));
+        }
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.node_count(),258u);
+    }
+
     void test_concurrent_canonical_construction() {
         auto& thread_manager = ThreadManager::instance();
         SizeType maximum = thread_manager.maximum_concurrency();
@@ -1096,6 +1152,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_statistics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_manager_separation);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_concurrent_canonical_construction);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_hashed_unique_table_concurrent_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_node_readers_during_concurrent_growth);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);

@@ -24,6 +24,7 @@
 #include <set>
 #include <optional>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -62,7 +63,7 @@ class Robdd {
 
 //! \brief Snapshot of manager allocations, obtained under a single lock.
 //! \details Counts and ABI payload sizes are exact for their C++ containers.
-//! The total heap footprint is NOT reported: standard-library map node links,
+//! The total heap footprint is NOT reported: hash-table buckets, map nodes,
 //! allocator overhead and any other runtime allocations are excluded.
 //! Nodes not reachable from a particular root remain in the manager.
 struct RobddManagerStatistics {
@@ -306,6 +307,25 @@ class RobddManager {
     using NodeKey = std::tuple<SizeType,NodeRef,NodeRef>;
     using IteKey = std::tuple<NodeRef,NodeRef,NodeRef>;
 
+    // A hash collision must never imply canonical equality: unordered_map
+    // still compares all three NodeKey members through tuple equality.
+    // All lookups, insertions and rehashes remain under the original _mutex.
+    struct NodeKeyHash {
+        std::size_t operator()(NodeKey const& key) const noexcept {
+            constexpr std::size_t salt=
+                static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
+            std::size_t seed=0u;
+            auto combine=[&seed](SizeType value) {
+                seed^=std::hash<SizeType>{}(value)+salt
+                    +(seed<<6u)+(seed>>2u);
+            };
+            combine(std::get<0>(key));
+            combine(std::get<1>(key));
+            combine(std::get<2>(key));
+            return seed;
+        }
+    };
+
     struct Node {
         BddVariable variable;
         NodeRef low;
@@ -358,7 +378,7 @@ class RobddManager {
   private:
     mutable std::mutex _mutex;
     std::vector<Node> _nodes;
-    std::map<NodeKey,NodeRef> _unique_table;
+    std::unordered_map<NodeKey,NodeRef,NodeKeyHash> _unique_table;
     std::map<IteKey,NodeRef> _ite_cache;
 };
 
