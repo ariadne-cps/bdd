@@ -11,3 +11,9 @@ add_executable(benchmark_robdd_parallel_ite benchmark_robdd_parallel_ite.cpp)
 target_link_libraries(benchmark_robdd_parallel_ite PRIVATE
     ariadne-bdd bdd ariadne-benchmarking)
 add_dependencies(benchmarks benchmark_robdd_parallel_ite)
+
+# Manual-only unique-table insertion/lookup benchmark. No CTest registration.
+add_executable(benchmark_robdd_unique_table benchmark_robdd_unique_table.cpp)
+target_link_libraries(benchmark_robdd_unique_table PRIVATE
+    ariadne-bdd bdd ariadne-benchmarking)
+add_dependencies(benchmarks benchmark_robdd_unique_table)

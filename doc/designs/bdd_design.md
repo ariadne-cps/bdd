@@ -1599,3 +1599,33 @@ A dedicated manual hit/miss canonicalization benchmark would
 help attribute effects to the table itself. This patch makes
 no claim of measured speedup, and benchmark performance
 experiments are **never run in CI**.
+
+
+### 2026-11-09 - Manual canonical-table hit/miss benchmark
+
+Added `benchmark_robdd_unique_table` using the project's
+standalone Benchmarking framework. The matrix accepts
+`--keys 256,1024,4096` and `--concurrency 0,1,2,4,8`
+(or explicit scalar choices); its four paired cases are:
+serial/scheduled × fresh/existing canonical key lookup.
+Each sample builds an entirely new manager and the same
+operand nodes outside the timer. In the existing workload,
+all expected decision nodes are populated before timing;
+the fresh workload starts with no such canonical keys.
+The timed region performs exactly N public `make_node`
+calls, with the result protected from elimination; checks of
+physical node counts, unique-table entry counts and repeated
+canonical identity occur after timing. The scheduled variant
+uses shared `ThreadManager` tasks operating on **one**
+canonical manager, retaining the mutex-based thread-safety
+contract. Enqueue and future-wait time are included by
+design and must not be mistaken for lookup-only time.
+The reporting unit is nanoseconds per public `make_node`
+call, including public API validation/normalization, not
+nanoseconds per internal hash probe.
+
+The separate ITE cold-cache benchmark remains necessary
+because it combines canonicalization with recursion, computed
+cache and DAG access. No performance results have been
+recorded for the hash-table variant yet. All timing runs
+remain manual and out of CI.

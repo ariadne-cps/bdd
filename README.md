@@ -235,3 +235,37 @@ provides a first end-to-end check. An additional targeted
 canonical-node benchmark can isolate table hit/miss throughput.
 All performance benchmarks remain manual; regular correctness
 tests and sanitizers may run in CI.
+
+
+#### Canonical unique-table benchmark
+
+The standalone `benchmark_robdd_unique_table` uses Ariadne
+Benchmarking's `Parameter`, `Matrix`, `Runner` and `Report`
+to isolate public `make_node` canonicalization work on newly
+inserted (`fresh`) versus already existing (`existing`) keys.
+Each sample uses a fresh manager; operand nodes and, for the
+existing-key case, canonical keys are prepared **outside timing**.
+Every timed run performs a fixed number of `make_node` calls
+and reports median nanoseconds **per key**, normalized by that
+count. The timed `scheduled` variant uses concurrent tasks
+against the **same** manager and includes enqueue/join overhead;
+`serial` remains the matched reference. All samples verify
+canonical node counts and repeated-key identity outside timing.
+
+```bash
+git pull --ff-only
+git submodule update --init --recursive
+cmake --build build-release --target benchmark_robdd_unique_table
+./build-release/benchmarks/benchmark_robdd_unique_table \
+  --keys 256,1024,4096 --concurrency 0,1,2,4,8 --samples 7
+```
+
+This measures **the public API**, which also performs operand
+validation and canonical normalization; it is not a raw
+`unordered_map` microbenchmark. For measuring the effect of the
+container change, compare the `serial` median ns/key with the
+pre-hash implementation under the same compiler and hardware.
+Task scheduling is included in `scheduled` timings by design;
+at concurrency zero it falls back to the caller's thread.
+This is manual-only: no performance experiment is registered
+with CTest or executed in CI.
