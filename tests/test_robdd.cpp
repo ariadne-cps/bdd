@@ -908,6 +908,33 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_ite_profiled_reductions() {
+        RobddManager manager;
+        auto f=manager.constant(false);
+        auto t=manager.constant(true);
+        auto x=manager.variable(0u);
+        auto y=manager.variable(1u);
+        auto not_x=manager.negation(x);
+        RobddIteProfile counters;
+
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(t,x,y,false,counters),x);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(f,x,y,false,counters),y);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(x,y,y,false,counters),y);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(x,t,f,false,counters),x);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(x,f,t,false,counters),not_x);
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(x,t,y,false,counters),
+            manager.disjunction(x,y));
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.ite_profiled(x,f,y,false,counters),
+            manager.conjunction(not_x,y));
+
+        // ITE(x XOR y, y, NOT x) = NOT x. Its y cofactors reduce to
+        // equal children; the surviving x node has a complemented low edge.
+        auto condition=manager.exclusive_or(x,y);
+        ARIADNE_TESTING_EXPECT_EQUAL(
+            manager.ite_profiled(condition,y,not_x,false,counters),not_x);
+        ARIADNE_TESTING_PROVE(counters.calls>1u);
+    }
+
     void test_ite_profiled_diagnostics() {
         struct Restore {
             ThreadManager& manager;
@@ -1156,6 +1183,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_node_readers_during_concurrent_growth);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_reductions);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_batched_ite_cache_and_complement_semantics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
 }
