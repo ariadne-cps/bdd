@@ -908,6 +908,19 @@ class TestRobdd : public Ariadne::Testing::ContextFixture {
         }
     }
 
+    void test_model_count_skipped_level_overflow() {
+        RobddManager manager;
+        constexpr SizeType bits=std::numeric_limits<SizeType>::digits;
+        // Both terminal cofactors fit individually. The skipped variables
+        // make the final count overflow, either by the shift width itself
+        // or by multiplying a representable subtotal by two.
+        auto distant=manager.variable(bits);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.model_count(distant,bits+1u));
+        auto second=manager.variable(1u);
+        ARIADNE_TESTING_EXPECT_EXCEPTION(manager.model_count(second,bits+1u));
+        ARIADNE_TESTING_EXPECT_EQUAL(manager.model_count(second,3u),4u);
+    }
+
     void test_ite_profiled_reductions() {
         RobddManager manager;
         auto f=manager.constant(false);
@@ -1184,6 +1197,7 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_parallel_ite_truth_tables_and_canonicality);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_diagnostics);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_reductions);
+    ARIADNE_TESTING_ADD_TEST(TestRobdd, test_model_count_skipped_level_overflow);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_batched_ite_cache_and_complement_semantics);
     return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
 }

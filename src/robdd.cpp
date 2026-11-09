@@ -120,8 +120,9 @@ Robdd RobddManager::shift(Robdd const& value, std::ptrdiff_t offset) {
         ? static_cast<SizeType>(-(offset + 1)) + 1u
         : static_cast<SizeType>(offset);
 
-    ARIADNE_PRECONDITION_MSG(negative or magnitude < max_index,
-        "ROBDD variable shift overflows the variable index range");
+    // The magnitude of ptrdiff_t fits SizeType, including PTRDIFF_MIN;
+    // it cannot reach the reserved maximum unsigned index. The checks
+    // below validate the shifted indices before any nodes are created.
     // Preflight every supported variable before creating any new nodes.
     for (BddVariable variable : support(value)) {
         SizeType index = variable.index();
@@ -610,15 +611,16 @@ RobddManager::IteStep RobddManager::_ite_lookup_split_unlocked(
         result.cached_result=hit->second;
         return result;
     }
-    std::optional<Node> cnode;
+    // All three ITE entry points return on terminal conditions before
+    // taking this snapshot, so the condition always has a physical node.
+    Node const cnode=_nodes[_node_index(condition)];
     std::optional<Node> tnode;
     std::optional<Node> enode;
-    if(not _is_terminal(condition)) cnode=_nodes[_node_index(condition)];
     if(not _is_terminal(then_branch)) tnode=_nodes[_node_index(then_branch)];
     if(not _is_terminal(else_branch)) enode=_nodes[_node_index(else_branch)];
     SizeType const absent=std::numeric_limits<SizeType>::max();
     result.variable=std::min({
-        cnode ? cnode->variable.index() : absent,
+        cnode.variable.index(),
         tnode ? tnode->variable.index() : absent,
         enode ? enode->variable.index() : absent
     });
