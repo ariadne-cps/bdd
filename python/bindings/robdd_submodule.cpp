@@ -14,6 +14,7 @@
  */
 
 #include <stdexcept>
+#include <memory>
 
 #include "pybind11.hpp"
 #include "bdd/robdd.hpp"
@@ -32,7 +33,7 @@ void robdd_submodule(pybind11::module& module) {
             return lhs!=rhs;
         });
 
-    pybind11::class_<RobddManager>(module,"RobddManager")
+    pybind11::class_<RobddManager,std::shared_ptr<RobddManager>>(module,"RobddManager")
         .def(pybind11::init<>())
         .def("constant",
             [](RobddManager& manager, Bool value) {
