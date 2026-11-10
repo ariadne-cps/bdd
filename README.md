@@ -185,7 +185,7 @@ nodes, vector reallocation, unique table and ITE cache. The independent
 concurrency regression was retained to continue testing simultaneous
 canonical construction, node inspection, evaluation and coherent
 statistics. Diagnostics and Benchmarking remain available for further
-manual experiments. See `doc/designs/bdd_design.md` for all measured
+manual experiments. See `doc/bdd_design.md` for all measured
 values and the lock-wait caveats.
 
 Neither the default serial `ite()` nor the experimental
