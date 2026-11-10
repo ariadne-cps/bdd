@@ -24,6 +24,9 @@ endif()
 require_same_dependency_commit(Build CHAINS
     "build" "threading|build")
 
+require_same_dependency_commit(Logging CHAINS
+    "threading|logging" "benchmarking|logging")
+
 ariadne_setup_module(bdd)
 
 # Public ABI selection: must propagate consistently to clients and sources.
