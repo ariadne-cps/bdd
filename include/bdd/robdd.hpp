@@ -1,7 +1,8 @@
 /***************************************************************************
- *            robdd.hpp
+ *            bdd/robdd.hpp
  *
  *  Copyright  2026  Luca Geretti
+ *
  ****************************************************************************/
 
 /*
@@ -11,6 +12,18 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
+ *
+ *  Ariadne BDD is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with Ariadne BDD. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/** @file bdd/robdd.hpp
+ *  @brief Canonical reduced ordered binary decision diagrams and their manager.
  */
 
 #ifndef ARIADNE_BDD_ROBDD_HPP
@@ -41,18 +54,24 @@ class RobddManager;
 //! complement polarity. The owning manager must outlive every handle.
 class Robdd {
   public:
+    /** @brief Report whether this diagram represents the false terminal. */
     Bool is_false() const { return _root == 0u; }
+    /** @brief Report whether this diagram represents the true terminal. */
     Bool is_true() const { return _root == 1u; }
+    /** @brief Report whether this diagram is a Boolean terminal. */
     Bool is_terminal() const { return _root <= 1u; }
 
+    /** @brief Compare diagram identity within the same manager. */
     friend Bool operator==(Robdd const& lhs, Robdd const& rhs) {
         return lhs._manager == rhs._manager and lhs._root == rhs._root;
     }
+    /** @brief Check whether two diagram handles differ. */
     friend Bool operator!=(Robdd const& lhs, Robdd const& rhs) { return not (lhs == rhs); }
 
   private:
     using NodeRef = SizeType;
 
+    /** @brief Construct a diagram handle from its owner and semantic root. */
     Robdd(RobddManager* manager, NodeRef root) : _manager(manager), _root(root) { }
 
     RobddManager* _manager;
@@ -102,6 +121,7 @@ struct RobddIteProfile {
     std::uint64_t task_join_ns=0u;
     std::uint64_t task_start_delay_ns=0u;
 
+    /** @brief Add the counters of a child ITE computation to this profile. */
     void accumulate(RobddIteProfile const& child) {
         calls+=child.calls;
         cache_lookups+=child.cache_lookups;
@@ -132,7 +152,9 @@ class RobddManager {
     //! \brief Construct an empty manager for canonical ROBDDs.
     //! \details The manager owns all nodes and must outlive its Robdd handles.
     RobddManager() = default;
+    /** @brief Disallow copying a manager that owns canonical nodes. */
     RobddManager(RobddManager const&) = delete;
+    /** @brief Disallow copy assignment of canonical node ownership. */
     RobddManager& operator=(RobddManager const&) = delete;
 
     //! \brief Return the Boolean constant false or true.
@@ -310,7 +332,9 @@ class RobddManager {
     // A hash collision must never imply canonical equality: unordered_map
     // still compares all three NodeKey members through tuple equality.
     // All lookups, insertions and rehashes remain under the original _mutex.
+    /** @brief Hash a canonical node key without compromising full-key equality. */
     struct NodeKeyHash {
+        /** @brief Compute a hash from a node's variable and its two child references. */
         std::size_t operator()(NodeKey const& key) const noexcept {
             constexpr std::size_t salt=
                 static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
@@ -326,6 +350,7 @@ class RobddManager {
         }
     };
 
+    /** @brief Store one canonical decision node and its two children. */
     struct Node {
         BddVariable variable;
         NodeRef low;
@@ -333,6 +358,7 @@ class RobddManager {
     };
     // Snapshot of an ITE cache lookup and cofactor decomposition;
     // only value copies are retained outside the manager mutex.
+    /** @brief Record a cache lookup and the three cofactor splits for one ITE step. */
     struct IteStep {
         Bool cached=false;
         NodeRef cached_result=0u;
@@ -345,32 +371,49 @@ class RobddManager {
     static constexpr NodeRef FALSE_NODE = 0u;
     static constexpr NodeRef TRUE_NODE = 1u;
 
+    /** @brief Check whether an internal reference is a terminal. */
     static Bool _is_terminal(NodeRef ref) { return ref <= TRUE_NODE; }
+    /** @brief Check the complement bit of a node reference. */
     static Bool _is_complemented(NodeRef ref) { return (ref & 1u) != 0u; }
+    /** @brief Flip the complement bit without allocating a new node. */
     static NodeRef _negate(NodeRef ref) { return ref ^ 1u; }
+    /** @brief Decode the physical node index from its reference. */
     static SizeType _node_index(NodeRef ref) { return (ref >> 1u) - 1u; }
+    /** @brief Encode an allocated node index as a regular reference. */
     static NodeRef _make_regular_node_ref(SizeType index) { return (index + 1u) << 1u; }
 
+    /** @brief Validate manager ownership and return the semantic root reference. */
     NodeRef _validate(Robdd const& value) const;
+    /** @brief Validate that the requested variable universe covers the function support. */
     SizeType _validate_variable_domain(
         NodeRef root, SizeType variable_count,
         SizeType first_variable_index) const;
+    /** @brief Read the immutable canonical node denoted by a reference. */
     Node _node(NodeRef ref) const;
+    /** @brief Return the top variable index or the terminal-order sentinel. */
     SizeType _top_variable(NodeRef ref) const;
+    /** @brief Return low and high cofactors at a chosen variable. */
     std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;
 
+    /** @brief Canonicalize a decision node, reducing equal branches. */
     NodeRef _make_node(BddVariable variable, NodeRef low, NodeRef high);
     // _unlocked requires _mutex, and the wrapper acquires it.
+    /** @brief Inspect the computed table and cofactor nodes while holding the manager lock. */
     IteStep _ite_lookup_split_unlocked(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
+    /** @brief Acquire the manager lock and snapshot an ITE computation step. */
     IteStep _ite_lookup_split(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
+    /** @brief Recursively compute canonical if-then-else using the computed table. */
     NodeRef _ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch);
+    /** @brief Compute if-then-else using bounded parallel task decomposition. */
     NodeRef _ite_parallel(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch,
         unsigned forks_remaining);
+    /** @brief Canonicalize a node while collecting synchronization statistics. */
     NodeRef _make_node_profiled(
         BddVariable variable,NodeRef low,NodeRef high,RobddIteProfile& counters);
+    /** @brief Compute if-then-else while collecting diagnostic counters. */
     NodeRef _ite_profiled(
         NodeRef condition,NodeRef then_branch,NodeRef else_branch,
         RobddIteProfile& counters,unsigned forks_remaining);
