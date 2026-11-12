@@ -39,7 +39,7 @@ namespace Ariadne {
 class BddVariable {
   public:
     /** @brief Construct a Boolean variable with the given stable index. */
-    explicit BddVariable(SizeType index) : _index(index) { }
+    explicit BddVariable(SizeType index) : _index(index) {}
 
     /** @brief Return the Boolean variable index. */
     SizeType index() const { return _index; }
@@ -47,7 +47,7 @@ class BddVariable {
     /** @brief Compare Boolean variables for identity. */
     friend Bool operator==(BddVariable lhs, BddVariable rhs) { return lhs._index == rhs._index; }
     /** @brief Check whether two variables have distinct indices. */
-    friend Bool operator!=(BddVariable lhs, BddVariable rhs) { return not (lhs == rhs); }
+    friend Bool operator!=(BddVariable lhs, BddVariable rhs) { return not(lhs == rhs); }
     /** @brief Compare variable indices in increasing order. */
     friend Bool operator<(BddVariable lhs, BddVariable rhs) { return lhs._index < rhs._index; }
 

@@ -26,20 +26,21 @@
  *  @brief Implement ROBDD canonicalization, Boolean operations and enumeration.
  */
 
+#include "bdd/robdd.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <functional>
 #include <limits>
 #include <set>
 
-#include "utility/macros.hpp"
-#include "bdd/robdd.hpp"
 #include "threading/task_group.hpp"
+#include "utility/macros.hpp"
 
 namespace Ariadne {
 
 Robdd RobddManager::constant(Bool value) {
-    return Robdd(this,value ? TRUE_NODE : FALSE_NODE);
+    return Robdd(this, value ? TRUE_NODE : FALSE_NODE);
 }
 
 Robdd RobddManager::variable(SizeType index) {
@@ -48,11 +49,11 @@ Robdd RobddManager::variable(SizeType index) {
 
 Robdd RobddManager::variable(BddVariable variable) {
     ARIADNE_PRECONDITION_MSG(variable.index() < std::numeric_limits<SizeType>::max(),
-        "Maximum variable index is reserved for terminal ordering");
-    return Robdd(this,_make_node(variable,FALSE_NODE,TRUE_NODE));
+                             "Maximum variable index is reserved for terminal ordering");
+    return Robdd(this, _make_node(variable, FALSE_NODE, TRUE_NODE));
 }
 
-std::optional<BddVariable> RobddManager::top_variable(Robdd const& value) const {
+std::optional<BddVariable> RobddManager::top_variable(const Robdd& value) const {
     NodeRef root = _validate(value);
     if (_is_terminal(root)) {
         return std::nullopt;
@@ -60,38 +61,38 @@ std::optional<BddVariable> RobddManager::top_variable(Robdd const& value) const 
     return _node(root).variable;
 }
 
-Robdd RobddManager::low(Robdd const& value) const {
+Robdd RobddManager::low(const Robdd& value) const {
     NodeRef root = _validate(value);
     ARIADNE_PRECONDITION_MSG(not _is_terminal(root),
-        "Cannot inspect the low branch of a terminal ROBDD");
+                             "Cannot inspect the low branch of a terminal ROBDD");
     Node node = _node(root);
     return Robdd(const_cast<RobddManager*>(this),
-        _is_complemented(root) ? _negate(node.low) : node.low);
+                 _is_complemented(root) ? _negate(node.low) : node.low);
 }
 
-Robdd RobddManager::high(Robdd const& value) const {
+Robdd RobddManager::high(const Robdd& value) const {
     NodeRef root = _validate(value);
     ARIADNE_PRECONDITION_MSG(not _is_terminal(root),
-        "Cannot inspect the high branch of a terminal ROBDD");
+                             "Cannot inspect the high branch of a terminal ROBDD");
     Node node = _node(root);
     return Robdd(const_cast<RobddManager*>(this),
-        _is_complemented(root) ? _negate(node.high) : node.high);
+                 _is_complemented(root) ? _negate(node.high) : node.high);
 }
 
 Robdd RobddManager::make_node(
-        BddVariable variable, Robdd const& low, Robdd const& high) {
+    BddVariable variable, const Robdd& low, const Robdd& high) {
     NodeRef low_ref = _validate(low);
     NodeRef high_ref = _validate(high);
     ARIADNE_PRECONDITION_MSG(variable.index() < std::numeric_limits<SizeType>::max(),
-        "Maximum variable index is reserved for terminal ordering");
+                             "Maximum variable index is reserved for terminal ordering");
     ARIADNE_PRECONDITION_MSG(
         variable.index() < _top_variable(low_ref) and
-        variable.index() < _top_variable(high_ref),
+            variable.index() < _top_variable(high_ref),
         "ROBDD node variable must precede the variables of both children");
-    return Robdd(this,_make_node(variable,low_ref,high_ref));
+    return Robdd(this, _make_node(variable, low_ref, high_ref));
 }
 
-std::vector<BddVariable> RobddManager::support(Robdd const& value) const {
+std::vector<BddVariable> RobddManager::support(const Robdd& value) const {
     NodeRef root = _validate(value);
     std::set<NodeRef> visited;
     std::set<SizeType> indices;
@@ -113,16 +114,16 @@ std::vector<BddVariable> RobddManager::support(Robdd const& value) const {
 
     std::vector<BddVariable> result;
     result.reserve(indices.size());
-    for (SizeType index : indices) {
+    for (SizeType index: indices) {
         result.emplace_back(index);
     }
     return result;
 }
 
-Robdd RobddManager::shift(Robdd const& value, std::ptrdiff_t offset) {
+Robdd RobddManager::shift(const Robdd& value, std::ptrdiff_t offset) {
     NodeRef root = _validate(value);
     if (_is_terminal(root) or offset == 0) {
-        return Robdd(this,root);
+        return Robdd(this, root);
     }
 
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
@@ -130,21 +131,21 @@ Robdd RobddManager::shift(Robdd const& value, std::ptrdiff_t offset) {
     // Avoid negating PTRDIFF_MIN, which cannot be represented as positive
     // ptrdiff_t. SizeType is the unsigned representation of variable indices.
     SizeType magnitude = negative
-        ? static_cast<SizeType>(-(offset + 1)) + 1u
-        : static_cast<SizeType>(offset);
+                           ? static_cast<SizeType>(-(offset + 1)) + 1u
+                           : static_cast<SizeType>(offset);
 
     // The magnitude of ptrdiff_t fits SizeType, including PTRDIFF_MIN;
     // it cannot reach the reserved maximum unsigned index. The checks
     // below validate the shifted indices before any nodes are created.
     // Preflight every supported variable before creating any new nodes.
-    for (BddVariable variable : support(value)) {
+    for (BddVariable variable: support(value)) {
         SizeType index = variable.index();
         ARIADNE_PRECONDITION_MSG(
             negative ? index >= magnitude : index < max_index - magnitude,
             "ROBDD variable shift leaves the valid variable index range");
     }
 
-    std::map<NodeRef,NodeRef> memo;
+    std::map<NodeRef, NodeRef> memo;
     std::function<NodeRef(NodeRef)> rebuild = [&](NodeRef ref) -> NodeRef {
         if (_is_terminal(ref)) {
             return ref;
@@ -157,27 +158,27 @@ Robdd RobddManager::shift(Robdd const& value, std::ptrdiff_t offset) {
             NodeRef high = rebuild(node.high);
             SizeType index = node.variable.index();
             SizeType shifted_index = negative ? index - magnitude : index + magnitude;
-            NodeRef shifted = _make_node(BddVariable(shifted_index),low,high);
-            found = memo.emplace(regular,shifted).first;
+            NodeRef shifted = _make_node(BddVariable(shifted_index), low, high);
+            found = memo.emplace(regular, shifted).first;
         }
         return _is_complemented(ref) ? _negate(found->second) : found->second;
     };
-    return Robdd(this,rebuild(root));
+    return Robdd(this, rebuild(root));
 }
 
 Robdd RobddManager::rename(
-        Robdd const& value, std::map<SizeType,SizeType> const& indices) {
+    const Robdd& value, const std::map<SizeType, SizeType>& indices) {
     NodeRef root = _validate(value);
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
-    for (auto const& entry : indices) {
+    for (const auto& entry: indices) {
         ARIADNE_PRECONDITION_MSG(entry.first < max_index and entry.second < max_index,
-            "ROBDD variable renaming uses the reserved terminal-order index");
+                                 "ROBDD variable renaming uses the reserved terminal-order index");
     }
     if (_is_terminal(root) or indices.empty()) {
-        return Robdd(this,root);
+        return Robdd(this, root);
     }
 
-    std::map<NodeRef,NodeRef> memo;
+    std::map<NodeRef, NodeRef> memo;
     std::function<NodeRef(NodeRef)> rebuild = [&](NodeRef ref) -> NodeRef {
         if (_is_terminal(ref)) {
             return ref;
@@ -190,26 +191,27 @@ Robdd RobddManager::rename(
             NodeRef high = rebuild(node.high);
             auto replacement = indices.find(node.variable.index());
             SizeType destination = replacement == indices.end()
-                ? node.variable.index() : replacement->second;
+                                     ? node.variable.index()
+                                     : replacement->second;
             // A general simultaneous substitution may reverse the variable
             // order or identify variables. _make_node alone is not valid here.
-            NodeRef variable = _make_node(BddVariable(destination),FALSE_NODE,TRUE_NODE);
-            NodeRef renamed = _ite(variable,high,low);
-            found = memo.emplace(regular,renamed).first;
+            NodeRef variable = _make_node(BddVariable(destination), FALSE_NODE, TRUE_NODE);
+            NodeRef renamed = _ite(variable, high, low);
+            found = memo.emplace(regular, renamed).first;
         }
         return _is_complemented(ref) ? _negate(found->second) : found->second;
     };
-    return Robdd(this,rebuild(root));
+    return Robdd(this, rebuild(root));
 }
 
 Robdd RobddManager::restrict(
-        Robdd const& value, BddVariable variable, Bool assignment) {
+    const Robdd& value, BddVariable variable, Bool assignment) {
     NodeRef root = _validate(value);
     ARIADNE_PRECONDITION_MSG(
         variable.index() < std::numeric_limits<SizeType>::max(),
         "Cannot restrict the reserved terminal-order variable index");
 
-    std::map<NodeRef,NodeRef> memo;
+    std::map<NodeRef, NodeRef> memo;
     std::function<NodeRef(NodeRef)> walk = [&](NodeRef ref) -> NodeRef {
         if (_is_terminal(ref) or _top_variable(ref) > variable.index()) {
             return ref;
@@ -220,39 +222,39 @@ Robdd RobddManager::restrict(
         }
 
         SizeType top = _top_variable(ref);
-        auto branches = _cofactor(ref,top);
+        auto branches = _cofactor(ref, top);
         NodeRef result;
         if (top == variable.index()) {
             result = assignment ? branches.second : branches.first;
         } else {
             NodeRef low = walk(branches.first);
             NodeRef high = walk(branches.second);
-            result = _make_node(BddVariable(top),low,high);
+            result = _make_node(BddVariable(top), low, high);
         }
-        memo.emplace(ref,result);
+        memo.emplace(ref, result);
         return result;
     };
-    return Robdd(this,walk(root));
+    return Robdd(this, walk(root));
 }
 
 Robdd RobddManager::exists(
-        Robdd const& value, std::vector<BddVariable> const& variables) {
+    const Robdd& value, const std::vector<BddVariable>& variables) {
     NodeRef root = _validate(value);
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
     std::set<SizeType> quantified;
-    for (BddVariable variable : variables) {
+    for (BddVariable variable: variables) {
         ARIADNE_PRECONDITION_MSG(variable.index() < max_index,
-            "Cannot quantify the reserved terminal-order variable index");
+                                 "Cannot quantify the reserved terminal-order variable index");
         quantified.insert(variable.index());
     }
     if (quantified.empty() or _is_terminal(root)) {
-        return Robdd(this,root);
+        return Robdd(this, root);
     }
 
     // Existential quantification does not commute with complemented edges:
     // exists(v, NOT f) is not generally NOT exists(v, f). Memoize semantic
     // references rather than normalizing away their complement bit.
-    std::map<NodeRef,NodeRef> memo;
+    std::map<NodeRef, NodeRef> memo;
     std::function<NodeRef(NodeRef)> walk = [&](NodeRef ref) -> NodeRef {
         if (_is_terminal(ref)) {
             return ref;
@@ -263,143 +265,141 @@ Robdd RobddManager::exists(
         }
 
         SizeType top = _top_variable(ref);
-        auto branches = _cofactor(ref,top);
+        auto branches = _cofactor(ref, top);
         NodeRef low = walk(branches.first);
         NodeRef high = walk(branches.second);
         NodeRef result = quantified.count(top)
-            ? _ite(low,TRUE_NODE,high)
-            : _make_node(BddVariable(top),low,high);
-        memo.emplace(ref,result);
+                           ? _ite(low, TRUE_NODE, high)
+                           : _make_node(BddVariable(top), low, high);
+        memo.emplace(ref, result);
         return result;
     };
-    return Robdd(this,walk(root));
+    return Robdd(this, walk(root));
 }
 
 Robdd RobddManager::and_exists(
-        Robdd const& lhs, Robdd const& rhs,
-        std::vector<BddVariable> const& variables) {
+    const Robdd& lhs, const Robdd& rhs,
+    const std::vector<BddVariable>& variables) {
     NodeRef left = _validate(lhs);
     NodeRef right = _validate(rhs);
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
     std::set<SizeType> quantified;
-    for (BddVariable variable : variables) {
+    for (BddVariable variable: variables) {
         ARIADNE_PRECONDITION_MSG(variable.index() < max_index,
-            "Cannot quantify the reserved terminal-order variable index");
+                                 "Cannot quantify the reserved terminal-order variable index");
         quantified.insert(variable.index());
     }
     if (quantified.empty()) {
-        return Robdd(this,_ite(left,right,FALSE_NODE));
+        return Robdd(this, _ite(left, right, FALSE_NODE));
     }
 
     // Fused conjunction and existential abstraction. Each recursive call
     // visits the next variable of either input, including variables skipped
     // by one operand. Memoization is local to the quantification set.
-    using AndKey = std::pair<NodeRef,NodeRef>;
-    std::map<AndKey,NodeRef> memo;
-    std::function<NodeRef(NodeRef,NodeRef)> walk =
+    using AndKey = std::pair<NodeRef, NodeRef>;
+    std::map<AndKey, NodeRef> memo;
+    std::function<NodeRef(NodeRef, NodeRef)> walk =
         [&](NodeRef a, NodeRef b) -> NodeRef {
-            if (a == FALSE_NODE or b == FALSE_NODE or a == _negate(b)) {
-                return FALSE_NODE;
-            }
-            if (a == TRUE_NODE and b == TRUE_NODE) {
-                return TRUE_NODE;
-            }
+        if (a == FALSE_NODE or b == FALSE_NODE or a == _negate(b)) {
+            return FALSE_NODE;
+        }
+        if (a == TRUE_NODE and b == TRUE_NODE) {
+            return TRUE_NODE;
+        }
 
-            if (a > b) {
-                std::swap(a,b);
-            }
-            AndKey key(a,b);
-            auto found = memo.find(key);
-            if (found != memo.end()) {
-                return found->second;
-            }
+        if (a > b) {
+            std::swap(a, b);
+        }
+        AndKey key(a, b);
+        auto found = memo.find(key);
+        if (found != memo.end()) {
+            return found->second;
+        }
 
-            SizeType top = std::min(_top_variable(a),_top_variable(b));
-            auto a_branches = _cofactor(a,top);
-            auto b_branches = _cofactor(b,top);
-            NodeRef low = walk(a_branches.first,b_branches.first);
-            NodeRef high = walk(a_branches.second,b_branches.second);
-            NodeRef result = quantified.count(top)
-                ? _ite(low,TRUE_NODE,high)
-                : _make_node(BddVariable(top),low,high);
-            memo.emplace(key,result);
-            return result;
-        };
-    return Robdd(this,walk(left,right));
+        SizeType top = std::min(_top_variable(a), _top_variable(b));
+        auto a_branches = _cofactor(a, top);
+        auto b_branches = _cofactor(b, top);
+        NodeRef low = walk(a_branches.first, b_branches.first);
+        NodeRef high = walk(a_branches.second, b_branches.second);
+        NodeRef result = quantified.count(top)
+                           ? _ite(low, TRUE_NODE, high)
+                           : _make_node(BddVariable(top), low, high);
+        memo.emplace(key, result);
+        return result;
+    };
+    return Robdd(this, walk(left, right));
 }
 
-Robdd RobddManager::negation(Robdd const& value) {
-    return Robdd(this,_negate(_validate(value)));
+Robdd RobddManager::negation(const Robdd& value) {
+    return Robdd(this, _negate(_validate(value)));
 }
 
-Robdd RobddManager::conjunction(Robdd const& lhs, Robdd const& rhs) {
+Robdd RobddManager::conjunction(const Robdd& lhs, const Robdd& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    return Robdd(this,_ite(l,r,FALSE_NODE));
+    return Robdd(this, _ite(l, r, FALSE_NODE));
 }
 
-Robdd RobddManager::disjunction(Robdd const& lhs, Robdd const& rhs) {
+Robdd RobddManager::disjunction(const Robdd& lhs, const Robdd& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    return Robdd(this,_ite(l,TRUE_NODE,r));
+    return Robdd(this, _ite(l, TRUE_NODE, r));
 }
 
-Robdd RobddManager::exclusive_or(Robdd const& lhs, Robdd const& rhs) {
+Robdd RobddManager::exclusive_or(const Robdd& lhs, const Robdd& rhs) {
     NodeRef l = _validate(lhs);
     NodeRef r = _validate(rhs);
-    return Robdd(this,_ite(l,_negate(r),r));
+    return Robdd(this, _ite(l, _negate(r), r));
 }
 
 Robdd RobddManager::ite(
-        Robdd const& condition,
-        Robdd const& then_branch,
-        Robdd const& else_branch)
-{
+    const Robdd& condition,
+    const Robdd& then_branch,
+    const Robdd& else_branch) {
     NodeRef c = _validate(condition);
     NodeRef t = _validate(then_branch);
     NodeRef e = _validate(else_branch);
-    return Robdd(this,_ite(c,t,e));
+    return Robdd(this, _ite(c, t, e));
 }
 
 Robdd RobddManager::ite_parallel(
-        Robdd const& condition,
-        Robdd const& then_branch,
-        Robdd const& else_branch)
-{
+    const Robdd& condition,
+    const Robdd& then_branch,
+    const Robdd& else_branch) {
     NodeRef c = _validate(condition);
     NodeRef t = _validate(then_branch);
     NodeRef e = _validate(else_branch);
     // Bounded to two levels (at most four independent subproblems).
     // Small/one-worker computations use the exact existing algorithm.
-    if(ThreadManager::instance().concurrency()<2u)
-        return Robdd(this,_ite(c,t,e));
-    return Robdd(this,_ite_parallel(c,t,e,2u));
+    if (ThreadManager::instance().concurrency() < 2u)
+        return Robdd(this, _ite(c, t, e));
+    return Robdd(this, _ite_parallel(c, t, e, 2u));
 }
 
 Robdd RobddManager::ite_profiled(
-        Robdd const& condition,
-        Robdd const& then_branch,
-        Robdd const& else_branch,
-        Bool parallel,RobddIteProfile& counters)
-{
-    NodeRef const c=_validate(condition);
-    NodeRef const t=_validate(then_branch);
-    NodeRef const e=_validate(else_branch);
-    counters=RobddIteProfile{};
-    unsigned const budget=(parallel and
-        ThreadManager::instance().concurrency()>=2u) ? 2u : 0u;
-    return Robdd(this,_ite_profiled(c,t,e,counters,budget));
+    const Robdd& condition,
+    const Robdd& then_branch,
+    const Robdd& else_branch,
+    Bool parallel, RobddIteProfile& counters) {
+    const NodeRef c = _validate(condition);
+    const NodeRef t = _validate(then_branch);
+    const NodeRef e = _validate(else_branch);
+    counters = RobddIteProfile{};
+    const unsigned budget = (parallel and
+                             ThreadManager::instance().concurrency() >= 2u)
+                              ? 2u
+                              : 0u;
+    return Robdd(this, _ite_profiled(c, t, e, counters, budget));
 }
 
 Bool RobddManager::evaluate(
-        Robdd const& value,
-        BinaryWord const& assignment) const
-{
+    const Robdd& value,
+    const BinaryWord& assignment) const {
     NodeRef current = _validate(value);
     while (not _is_terminal(current)) {
         Node node = _node(current);
         ARIADNE_PRECONDITION_MSG(node.variable.index() < assignment.size(),
-            "Missing assignment for BDD variable " << node.variable.index());
+                                 "Missing assignment for BDD variable " << node.variable.index());
 
         NodeRef next = assignment[node.variable.index()] ? node.high : node.low;
         if (_is_complemented(current)) {
@@ -411,62 +411,62 @@ Bool RobddManager::evaluate(
 }
 
 SizeType RobddManager::model_count(
-        Robdd const& value, SizeType variable_count, SizeType first_variable_index) const {
+    const Robdd& value, SizeType variable_count, SizeType first_variable_index) const {
     NodeRef root = _validate(value);
-    SizeType end = _validate_variable_domain(root,variable_count,first_variable_index);
+    SizeType end = _validate_variable_domain(root, variable_count, first_variable_index);
     constexpr SizeType max_count = std::numeric_limits<SizeType>::max();
     constexpr SizeType count_bits = std::numeric_limits<SizeType>::digits;
 
     // Memoize semantic references AND the current universe index: the
     // same physical DAG node may be reached after different skipped levels.
-    std::map<std::pair<NodeRef,SizeType>,SizeType> memo;
-    std::function<SizeType(NodeRef,SizeType)> count =
+    std::map<std::pair<NodeRef, SizeType>, SizeType> memo;
+    std::function<SizeType(NodeRef, SizeType)> count =
         [&](NodeRef ref, SizeType level) -> SizeType {
-            if (ref == FALSE_NODE) {
-                return 0u;
-            }
-            if (ref == TRUE_NODE) {
-                SizeType remaining = end - level;
-                ARIADNE_PRECONDITION_MSG(remaining < count_bits,
-                    "Model count exceeds SizeType capacity");
-                return SizeType(1u) << remaining;
-            }
+        if (ref == FALSE_NODE) {
+            return 0u;
+        }
+        if (ref == TRUE_NODE) {
+            SizeType remaining = end - level;
+            ARIADNE_PRECONDITION_MSG(remaining < count_bits,
+                                     "Model count exceeds SizeType capacity");
+            return SizeType(1u) << remaining;
+        }
 
-            auto key = std::make_pair(ref,level);
-            auto found = memo.find(key);
-            if (found != memo.end()) {
-                return found->second;
-            }
+        auto key = std::make_pair(ref, level);
+        auto found = memo.find(key);
+        if (found != memo.end()) {
+            return found->second;
+        }
 
-            SizeType top = _top_variable(ref);
-            auto branches = _cofactor(ref,top);
-            SizeType low_count = count(branches.first,top+1u);
-            SizeType high_count = count(branches.second,top+1u);
-            ARIADNE_PRECONDITION_MSG(low_count <= max_count - high_count,
-                "Model count exceeds SizeType capacity");
-            SizeType subtotal = low_count + high_count;
-            SizeType skipped = top - level;
-            ARIADNE_PRECONDITION_MSG(
-                skipped < count_bits and subtotal <= (max_count >> skipped),
-                "Model count exceeds SizeType capacity");
-            SizeType result = subtotal << skipped;
-            memo.emplace(key,result);
-            return result;
-        };
-    return count(root,first_variable_index);
+        SizeType top = _top_variable(ref);
+        auto branches = _cofactor(ref, top);
+        SizeType low_count = count(branches.first, top + 1u);
+        SizeType high_count = count(branches.second, top + 1u);
+        ARIADNE_PRECONDITION_MSG(low_count <= max_count - high_count,
+                                 "Model count exceeds SizeType capacity");
+        SizeType subtotal = low_count + high_count;
+        SizeType skipped = top - level;
+        ARIADNE_PRECONDITION_MSG(
+            skipped < count_bits and subtotal <= (max_count >> skipped),
+            "Model count exceeds SizeType capacity");
+        SizeType result = subtotal << skipped;
+        memo.emplace(key, result);
+        return result;
+    };
+    return count(root, first_variable_index);
 }
 
 void RobddManager::for_each_satisfying_assignment(
-        Robdd const& value, SizeType variable_count,
-        std::function<void(BinaryWord const&)> const& visitor,
-        SizeType first_variable_index) const {
+    const Robdd& value, SizeType variable_count,
+    const std::function<void(const BinaryWord&)>& visitor,
+    SizeType first_variable_index) const {
     NodeRef root = _validate(value);
-    SizeType end = _validate_variable_domain(root,variable_count,first_variable_index);
+    SizeType end = _validate_variable_domain(root, variable_count, first_variable_index);
     ARIADNE_PRECONDITION_MSG(static_cast<Bool>(visitor),
-        "Satisfying-assignment visitor must be nonempty");
+                             "Satisfying-assignment visitor must be nonempty");
 
     BinaryWord word;
-    std::function<void(NodeRef,SizeType)> traverse =
+    std::function<void(NodeRef, SizeType)> traverse =
         [&](NodeRef ref, SizeType level) {
             if (ref == FALSE_NODE) {
                 return;
@@ -480,19 +480,19 @@ void RobddManager::for_each_satisfying_assignment(
             NodeRef low = ref;
             NodeRef high = ref;
             if (ref != TRUE_NODE and _top_variable(ref) == level) {
-                auto branches = _cofactor(ref,level);
+                auto branches = _cofactor(ref, level);
                 low = branches.first;
                 high = branches.second;
             }
             // For a don't-care variable or true terminal both choices have
             // identical subfunctions, but represent distinct assignments.
             word.append(false);
-            traverse(low,level+1u);
+            traverse(low, level + 1u);
             word.set_back(true);
-            traverse(high,level+1u);
+            traverse(high, level + 1u);
             word.pop_back();
         };
-    traverse(root,first_variable_index);
+    traverse(root, first_variable_index);
 }
 
 SizeType RobddManager::node_count() const {
@@ -512,14 +512,14 @@ RobddManagerStatistics RobddManager::statistics() const {
         sizeof(decltype(_ite_cache)::value_type)};
 }
 
-RobddManager::NodeRef RobddManager::_validate(Robdd const& value) const {
+RobddManager::NodeRef RobddManager::_validate(const Robdd& value) const {
     ARIADNE_PRECONDITION_MSG(value._manager == this,
-        "ROBDD operands must belong to the same manager");
+                             "ROBDD operands must belong to the same manager");
     return value._root;
 }
 
 SizeType RobddManager::_validate_variable_domain(
-        NodeRef root, SizeType variable_count, SizeType first_variable_index) const {
+    NodeRef root, SizeType variable_count, SizeType first_variable_index) const {
     constexpr SizeType max_index = std::numeric_limits<SizeType>::max();
     ARIADNE_PRECONDITION_MSG(
         first_variable_index < max_index and variable_count <= max_index - first_variable_index,
@@ -558,15 +558,15 @@ SizeType RobddManager::_top_variable(NodeRef ref) const {
     return _node(ref).variable.index();
 }
 
-std::pair<RobddManager::NodeRef,RobddManager::NodeRef>
-RobddManager::_cofactor(NodeRef ref, SizeType variable) const {
+std::pair<RobddManager::NodeRef, RobddManager::NodeRef>
+    RobddManager::_cofactor(NodeRef ref, SizeType variable) const {
     if (_is_terminal(ref)) {
-        return {ref,ref};
+        return {ref, ref};
     }
 
     Node node = _node(ref);
     if (node.variable.index() != variable) {
-        return {ref,ref};
+        return {ref, ref};
     }
 
     NodeRef low = node.low;
@@ -575,11 +575,11 @@ RobddManager::_cofactor(NodeRef ref, SizeType variable) const {
         low = _negate(low);
         high = _negate(high);
     }
-    return {low,high};
+    return {low, high};
 }
 
 RobddManager::NodeRef
-RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
+    RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
     if (low == high) {
         return low;
     }
@@ -594,7 +594,7 @@ RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
         complement_result = true;
     }
 
-    NodeKey key(variable.index(),low,high);
+    NodeKey key(variable.index(), low, high);
     NodeRef result;
 
     {
@@ -605,8 +605,8 @@ RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
             result = found->second;
         } else {
             result = _make_regular_node_ref(_nodes.size());
-            _nodes.push_back(Node{variable,low,high});
-            _unique_table.emplace(key,result);
+            _nodes.push_back(Node{variable, low, high});
+            _unique_table.emplace(key, result);
         }
     }
 
@@ -616,53 +616,53 @@ RobddManager::_make_node(BddVariable variable, NodeRef low, NodeRef high) {
 // Under one manager lock, check the cache and snapshot each operand node
 // once. No address into _nodes can escape a concurrent vector reallocation.
 RobddManager::IteStep RobddManager::_ite_lookup_split_unlocked(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const {
+    NodeRef condition, NodeRef then_branch, NodeRef else_branch) const {
     IteStep result{};
-    auto const hit=_ite_cache.find(IteKey(condition,then_branch,else_branch));
-    if(hit!=_ite_cache.end()) {
-        result.cached=true;
-        result.cached_result=hit->second;
+    const auto hit = _ite_cache.find(IteKey(condition, then_branch, else_branch));
+    if (hit != _ite_cache.end()) {
+        result.cached = true;
+        result.cached_result = hit->second;
         return result;
     }
     // All three ITE entry points return on terminal conditions before
     // taking this snapshot, so the condition always has a physical node.
-    Node const cnode=_nodes[_node_index(condition)];
+    const Node cnode = _nodes[_node_index(condition)];
     std::optional<Node> tnode;
     std::optional<Node> enode;
-    if(not _is_terminal(then_branch)) tnode=_nodes[_node_index(then_branch)];
-    if(not _is_terminal(else_branch)) enode=_nodes[_node_index(else_branch)];
-    SizeType const absent=std::numeric_limits<SizeType>::max();
-    result.variable=std::min({
-        cnode.variable.index(),
-        tnode ? tnode->variable.index() : absent,
-        enode ? enode->variable.index() : absent
-    });
-    auto split=[&](NodeRef ref,std::optional<Node> const& node)
-            ->std::pair<NodeRef,NodeRef> {
-        if(not node or node->variable.index()!=result.variable)
-            return {ref,ref};
-        NodeRef low=node->low;
-        NodeRef high=node->high;
-        if(_is_complemented(ref)) {
-            low=_negate(low);
-            high=_negate(high);
+    if (not _is_terminal(then_branch))
+        tnode = _nodes[_node_index(then_branch)];
+    if (not _is_terminal(else_branch))
+        enode = _nodes[_node_index(else_branch)];
+    const SizeType absent = std::numeric_limits<SizeType>::max();
+    result.variable = std::min({cnode.variable.index(),
+                                tnode ? tnode->variable.index() : absent,
+                                enode ? enode->variable.index() : absent});
+    auto split = [&](NodeRef ref, const std::optional<Node>& node)
+        -> std::pair<NodeRef, NodeRef> {
+        if (not node or node->variable.index() != result.variable)
+            return {ref, ref};
+        NodeRef low = node->low;
+        NodeRef high = node->high;
+        if (_is_complemented(ref)) {
+            low = _negate(low);
+            high = _negate(high);
         }
-        return {low,high};
+        return {low, high};
     };
-    result.condition=split(condition,cnode);
-    result.then_branch=split(then_branch,tnode);
-    result.else_branch=split(else_branch,enode);
+    result.condition = split(condition, cnode);
+    result.then_branch = split(then_branch, tnode);
+    result.else_branch = split(else_branch, enode);
     return result;
 }
 
 RobddManager::IteStep RobddManager::_ite_lookup_split(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const {
+    NodeRef condition, NodeRef then_branch, NodeRef else_branch) const {
     std::lock_guard<std::mutex> lock(_mutex);
-    return _ite_lookup_split_unlocked(condition,then_branch,else_branch);
+    return _ite_lookup_split_unlocked(condition, then_branch, else_branch);
 }
 
 RobddManager::NodeRef
-RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) {
+    RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) {
     if (condition == TRUE_NODE) {
         return then_branch;
     }
@@ -679,17 +679,18 @@ RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) 
         return _negate(condition);
     }
 
-    IteStep const step=_ite_lookup_split(condition,then_branch,else_branch);
-    if(step.cached) return step.cached_result;
-    NodeRef low=_ite(
-        step.condition.first,step.then_branch.first,step.else_branch.first);
-    NodeRef high=_ite(
-        step.condition.second,step.then_branch.second,step.else_branch.second);
-    NodeRef result=_make_node(BddVariable(step.variable),low,high);
-    IteKey key(condition,then_branch,else_branch);
+    const IteStep step = _ite_lookup_split(condition, then_branch, else_branch);
+    if (step.cached)
+        return step.cached_result;
+    NodeRef low = _ite(
+        step.condition.first, step.then_branch.first, step.else_branch.first);
+    NodeRef high = _ite(
+        step.condition.second, step.then_branch.second, step.else_branch.second);
+    NodeRef result = _make_node(BddVariable(step.variable), low, high);
+    IteKey key(condition, then_branch, else_branch);
     {
         std::lock_guard<std::mutex> lock(_mutex);
-        _ite_cache.emplace(key,result);
+        _ite_cache.emplace(key, result);
     }
     return result;
 }
@@ -699,47 +700,51 @@ RobddManager::_ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch) 
 // canonical allocation and memo-table access remains manager-locked.
 // A bounded fork budget avoids recursive task explosion.
 RobddManager::NodeRef RobddManager::_ite_parallel(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
-        unsigned forks_remaining) {
-    if(forks_remaining==0u)
-        return _ite(condition,then_branch,else_branch);
+    NodeRef condition, NodeRef then_branch, NodeRef else_branch,
+    unsigned forks_remaining) {
+    if (forks_remaining == 0u)
+        return _ite(condition, then_branch, else_branch);
 
     // Identical terminal and tautological reductions to sequential _ite.
-    if(condition==TRUE_NODE) return then_branch;
-    if(condition==FALSE_NODE) return else_branch;
-    if(then_branch==else_branch) return then_branch;
-    if(then_branch==TRUE_NODE and else_branch==FALSE_NODE)
+    if (condition == TRUE_NODE)
+        return then_branch;
+    if (condition == FALSE_NODE)
+        return else_branch;
+    if (then_branch == else_branch)
+        return then_branch;
+    if (then_branch == TRUE_NODE and else_branch == FALSE_NODE)
         return condition;
-    if(then_branch==FALSE_NODE and else_branch==TRUE_NODE)
+    if (then_branch == FALSE_NODE and else_branch == TRUE_NODE)
         return _negate(condition);
 
-    IteStep const step=_ite_lookup_split(condition,then_branch,else_branch);
-    if(step.cached) return step.cached_result;
+    const IteStep step = _ite_lookup_split(condition, then_branch, else_branch);
+    if (step.cached)
+        return step.cached_result;
 
     // Join before publishing the canonical parent; task inputs are copies.
     TaskGroup<ThreadManager> tasks(ThreadManager::instance());
-    auto right=tasks.fork([this,step,forks_remaining] {
-        return _ite_parallel(step.condition.second,step.then_branch.second,
-                             step.else_branch.second,forks_remaining-1u);
+    auto right = tasks.fork([this, step, forks_remaining] {
+        return _ite_parallel(step.condition.second, step.then_branch.second,
+                             step.else_branch.second, forks_remaining - 1u);
     });
-    NodeRef low=_ite_parallel(
-        step.condition.first,step.then_branch.first,step.else_branch.first,
-        forks_remaining-1u);
-    NodeRef high=right.get();
+    NodeRef low = _ite_parallel(
+        step.condition.first, step.then_branch.first, step.else_branch.first,
+        forks_remaining - 1u);
+    NodeRef high = right.get();
     tasks.join();
 
-    NodeRef result=_make_node(BddVariable(step.variable),low,high);
-    IteKey key(condition,then_branch,else_branch);
+    NodeRef result = _make_node(BddVariable(step.variable), low, high);
+    IteKey key(condition, then_branch, else_branch);
     {
         std::lock_guard<std::mutex> lock(_mutex);
-        _ite_cache.emplace(key,result);
+        _ite_cache.emplace(key, result);
     }
     return result;
 }
 
 namespace {
 
-using IteProfileClock=std::chrono::steady_clock;
+using IteProfileClock = std::chrono::steady_clock;
 
 std::uint64_t ite_profile_nanoseconds(IteProfileClock::duration elapsed) {
     return static_cast<std::uint64_t>(
@@ -752,18 +757,18 @@ std::uint64_t ite_profile_nanoseconds(IteProfileClock::duration elapsed) {
 class IteProfileLock {
   public:
     IteProfileLock(
-        std::mutex& mutex,SizeType& attempts,SizeType& contended,
+        std::mutex& mutex, SizeType& attempts, SizeType& contended,
         std::uint64_t& wait_ns)
-        : _lock(mutex,std::defer_lock)
-    {
+        : _lock(mutex, std::defer_lock) {
         ++attempts;
-        if(not _lock.try_lock()) {
+        if (not _lock.try_lock()) {
             ++contended;
-            auto const start=IteProfileClock::now();
+            const auto start = IteProfileClock::now();
             _lock.lock();
-            wait_ns+=ite_profile_nanoseconds(IteProfileClock::now()-start);
+            wait_ns += ite_profile_nanoseconds(IteProfileClock::now() - start);
         }
     }
+
   private:
     std::unique_lock<std::mutex> _lock;
 };
@@ -771,111 +776,114 @@ class IteProfileLock {
 } // namespace
 
 RobddManager::NodeRef RobddManager::_make_node_profiled(
-        BddVariable variable,NodeRef low,NodeRef high,
-        RobddIteProfile& counters) {
-    if(low==high) return low;
-    Bool complement=false;
-    if(_is_complemented(low)) {
-        low=_negate(low);
-        high=_negate(high);
-        complement=true;
+    BddVariable variable, NodeRef low, NodeRef high,
+    RobddIteProfile& counters) {
+    if (low == high)
+        return low;
+    Bool complement = false;
+    if (_is_complemented(low)) {
+        low = _negate(low);
+        high = _negate(high);
+        complement = true;
     }
-    NodeKey key(variable.index(),low,high);
+    NodeKey key(variable.index(), low, high);
     NodeRef result;
     {
         IteProfileLock lock(
-            _mutex,counters.unique_lock_calls,counters.unique_lock_contended,
+            _mutex, counters.unique_lock_calls, counters.unique_lock_contended,
             counters.unique_lock_wait_ns);
-        auto found=_unique_table.find(key);
-        if(found!=_unique_table.end()) {
-            result=found->second;
+        auto found = _unique_table.find(key);
+        if (found != _unique_table.end()) {
+            result = found->second;
         } else {
-            result=_make_regular_node_ref(_nodes.size());
-            _nodes.push_back(Node{variable,low,high});
-            _unique_table.emplace(key,result);
+            result = _make_regular_node_ref(_nodes.size());
+            _nodes.push_back(Node{variable, low, high});
+            _unique_table.emplace(key, result);
         }
     }
     return complement ? _negate(result) : result;
 }
 
 RobddManager::NodeRef RobddManager::_ite_profiled(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
-        RobddIteProfile& counters,unsigned forks_remaining) {
+    NodeRef condition, NodeRef then_branch, NodeRef else_branch,
+    RobddIteProfile& counters, unsigned forks_remaining) {
     ++counters.calls;
-    if(condition==TRUE_NODE) return then_branch;
-    if(condition==FALSE_NODE) return else_branch;
-    if(then_branch==else_branch) return then_branch;
-    if(then_branch==TRUE_NODE and else_branch==FALSE_NODE)
+    if (condition == TRUE_NODE)
+        return then_branch;
+    if (condition == FALSE_NODE)
+        return else_branch;
+    if (then_branch == else_branch)
+        return then_branch;
+    if (then_branch == TRUE_NODE and else_branch == FALSE_NODE)
         return condition;
-    if(then_branch==FALSE_NODE and else_branch==TRUE_NODE)
+    if (then_branch == FALSE_NODE and else_branch == TRUE_NODE)
         return _negate(condition);
 
-    IteKey key(condition,then_branch,else_branch);
+    IteKey key(condition, then_branch, else_branch);
     ++counters.cache_lookups;
     IteStep step;
     {
         // This one measured critical section matches the production
         // cache lookup AND node/cofactor snapshot exactly.
         IteProfileLock lock(
-            _mutex,counters.cache_lock_calls,counters.cache_lock_contended,
+            _mutex, counters.cache_lock_calls, counters.cache_lock_contended,
             counters.cache_lock_wait_ns);
-        step=_ite_lookup_split_unlocked(condition,then_branch,else_branch);
+        step = _ite_lookup_split_unlocked(condition, then_branch, else_branch);
     }
-    if(step.cached) {
+    if (step.cached) {
         ++counters.cache_hits;
         return step.cached_result;
     }
-    counters.node_snapshot_reads+=
-        static_cast<SizeType>(not _is_terminal(condition))
-        +static_cast<SizeType>(not _is_terminal(then_branch))
-        +static_cast<SizeType>(not _is_terminal(else_branch));
+    counters.node_snapshot_reads +=
+        static_cast<SizeType>(not _is_terminal(condition)) + static_cast<SizeType>(not _is_terminal(then_branch)) + static_cast<SizeType>(not _is_terminal(else_branch));
 
     NodeRef low;
     NodeRef high;
-    if(forks_remaining==0u) {
-        low=_ite_profiled(
-            step.condition.first,step.then_branch.first,step.else_branch.first,
-            counters,0u);
-        high=_ite_profiled(
-            step.condition.second,step.then_branch.second,step.else_branch.second,
-            counters,0u);
+    if (forks_remaining == 0u) {
+        low = _ite_profiled(
+            step.condition.first, step.then_branch.first, step.else_branch.first,
+            counters, 0u);
+        high = _ite_profiled(
+            step.condition.second, step.then_branch.second, step.else_branch.second,
+            counters, 0u);
     } else {
         RobddIteProfile high_counters;
         TaskGroup<ThreadManager> tasks(ThreadManager::instance());
-        auto const submit_start=IteProfileClock::now();
-        auto right=tasks.fork(
-            [this,step,forks_remaining,&high_counters,submit_start] {
-                high_counters.task_start_delay_ns+=ite_profile_nanoseconds(
-                    IteProfileClock::now()-submit_start);
+        const auto submit_start = IteProfileClock::now();
+        auto right = tasks.fork(
+            [this, step, forks_remaining, &high_counters, submit_start] {
+                high_counters.task_start_delay_ns += ite_profile_nanoseconds(
+                    IteProfileClock::now() - submit_start);
                 return _ite_profiled(
-                    step.condition.second,step.then_branch.second,step.else_branch.second,
-                    high_counters,forks_remaining-1u);
+                    step.condition.second, step.then_branch.second, step.else_branch.second,
+                    high_counters, forks_remaining - 1u);
             });
         ++counters.tasks_forked;
-        counters.task_submit_ns+=ite_profile_nanoseconds(
-            IteProfileClock::now()-submit_start);
-        low=_ite_profiled(
-            step.condition.first,step.then_branch.first,step.else_branch.first,
-            counters,forks_remaining-1u);
-        auto const join_start=IteProfileClock::now();
-        high=right.get();
-        counters.task_join_ns+=ite_profile_nanoseconds(
-            IteProfileClock::now()-join_start);
+        counters.task_submit_ns += ite_profile_nanoseconds(
+            IteProfileClock::now() - submit_start);
+        low = _ite_profiled(
+            step.condition.first, step.then_branch.first, step.else_branch.first,
+            counters, forks_remaining - 1u);
+        const auto join_start = IteProfileClock::now();
+        high = right.get();
+        counters.task_join_ns += ite_profile_nanoseconds(
+            IteProfileClock::now() - join_start);
         tasks.join();
         counters.accumulate(high_counters);
     }
 
-    NodeRef const result=_make_node_profiled(
-        BddVariable(step.variable),low,high,counters);
+    const NodeRef result = _make_node_profiled(
+        BddVariable(step.variable), low, high, counters);
     {
         IteProfileLock lock(
-            _mutex,counters.cache_lock_calls,counters.cache_lock_contended,
+            _mutex, counters.cache_lock_calls, counters.cache_lock_contended,
             counters.cache_lock_wait_ns);
-        auto const inserted=_ite_cache.emplace(key,result);
+        const auto inserted = _ite_cache.emplace(key, result);
         // A completed ITE key was already inserted between the cache
         // miss and this insertion: direct evidence of duplicate work.
         // It does not count all shared descendant work.
-        if(not inserted.second) ++counters.cache_raced_inserts;
+        if (not inserted.second)
+            ++counters.cache_raced_inserts;
     }
     return result;
 }

@@ -30,20 +30,20 @@
 #define ARIADNE_BDD_ROBDD_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <mutex>
-#include <cstdint>
-#include <set>
 #include <optional>
+#include <set>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "utility/typedefs.hpp"
-#include "utility/binary_word.hpp"
 #include "bdd/variable.hpp"
+#include "utility/binary_word.hpp"
+#include "utility/typedefs.hpp"
 
 namespace Ariadne {
 
@@ -62,17 +62,17 @@ class Robdd {
     Bool is_terminal() const { return _root <= 1u; }
 
     /** @brief Compare diagram identity within the same manager. */
-    friend Bool operator==(Robdd const& lhs, Robdd const& rhs) {
+    friend Bool operator==(const Robdd& lhs, const Robdd& rhs) {
         return lhs._manager == rhs._manager and lhs._root == rhs._root;
     }
     /** @brief Check whether two diagram handles differ. */
-    friend Bool operator!=(Robdd const& lhs, Robdd const& rhs) { return not (lhs == rhs); }
+    friend Bool operator!=(const Robdd& lhs, const Robdd& rhs) { return not(lhs == rhs); }
 
   private:
     using NodeRef = SizeType;
 
     /** @brief Construct a diagram handle from its owner and semantic root. */
-    Robdd(RobddManager* manager, NodeRef root) : _manager(manager), _root(root) { }
+    Robdd(RobddManager* manager, NodeRef root) : _manager(manager), _root(root) {}
 
     RobddManager* _manager;
     NodeRef _root;
@@ -100,47 +100,47 @@ struct RobddManagerStatistics {
 //! A raced cache insertion counts one completed duplicate ITE key,
 //! not the full amount of computation duplicated in its subtree.
 struct RobddIteProfile {
-    SizeType calls=0u;
-    SizeType cache_lookups=0u;
-    SizeType cache_hits=0u;
-    SizeType cache_raced_inserts=0u;
-    SizeType cache_lock_calls=0u;
-    SizeType cache_lock_contended=0u;
+    SizeType calls = 0u;
+    SizeType cache_lookups = 0u;
+    SizeType cache_hits = 0u;
+    SizeType cache_raced_inserts = 0u;
+    SizeType cache_lock_calls = 0u;
+    SizeType cache_lock_contended = 0u;
     // Operand values copied by the batched cache+node snapshot.
-    SizeType node_snapshot_reads=0u;
+    SizeType node_snapshot_reads = 0u;
     // Legacy separate-node-lock metrics remain zero for batched ITE.
-    SizeType node_lock_calls=0u;
-    SizeType node_lock_contended=0u;
-    SizeType unique_lock_calls=0u;
-    SizeType unique_lock_contended=0u;
-    SizeType tasks_forked=0u;
-    std::uint64_t cache_lock_wait_ns=0u;
-    std::uint64_t node_lock_wait_ns=0u;
-    std::uint64_t unique_lock_wait_ns=0u;
-    std::uint64_t task_submit_ns=0u;
-    std::uint64_t task_join_ns=0u;
-    std::uint64_t task_start_delay_ns=0u;
+    SizeType node_lock_calls = 0u;
+    SizeType node_lock_contended = 0u;
+    SizeType unique_lock_calls = 0u;
+    SizeType unique_lock_contended = 0u;
+    SizeType tasks_forked = 0u;
+    std::uint64_t cache_lock_wait_ns = 0u;
+    std::uint64_t node_lock_wait_ns = 0u;
+    std::uint64_t unique_lock_wait_ns = 0u;
+    std::uint64_t task_submit_ns = 0u;
+    std::uint64_t task_join_ns = 0u;
+    std::uint64_t task_start_delay_ns = 0u;
 
     /** @brief Add the counters of a child ITE computation to this profile. */
-    void accumulate(RobddIteProfile const& child) {
-        calls+=child.calls;
-        cache_lookups+=child.cache_lookups;
-        cache_hits+=child.cache_hits;
-        cache_raced_inserts+=child.cache_raced_inserts;
-        cache_lock_calls+=child.cache_lock_calls;
-        cache_lock_contended+=child.cache_lock_contended;
-        node_snapshot_reads+=child.node_snapshot_reads;
-        node_lock_calls+=child.node_lock_calls;
-        node_lock_contended+=child.node_lock_contended;
-        unique_lock_calls+=child.unique_lock_calls;
-        unique_lock_contended+=child.unique_lock_contended;
-        tasks_forked+=child.tasks_forked;
-        cache_lock_wait_ns+=child.cache_lock_wait_ns;
-        node_lock_wait_ns+=child.node_lock_wait_ns;
-        unique_lock_wait_ns+=child.unique_lock_wait_ns;
-        task_submit_ns+=child.task_submit_ns;
-        task_join_ns+=child.task_join_ns;
-        task_start_delay_ns+=child.task_start_delay_ns;
+    void accumulate(const RobddIteProfile& child) {
+        calls += child.calls;
+        cache_lookups += child.cache_lookups;
+        cache_hits += child.cache_hits;
+        cache_raced_inserts += child.cache_raced_inserts;
+        cache_lock_calls += child.cache_lock_calls;
+        cache_lock_contended += child.cache_lock_contended;
+        node_snapshot_reads += child.node_snapshot_reads;
+        node_lock_calls += child.node_lock_calls;
+        node_lock_contended += child.node_lock_contended;
+        unique_lock_calls += child.unique_lock_calls;
+        unique_lock_contended += child.unique_lock_contended;
+        tasks_forked += child.tasks_forked;
+        cache_lock_wait_ns += child.cache_lock_wait_ns;
+        node_lock_wait_ns += child.node_lock_wait_ns;
+        unique_lock_wait_ns += child.unique_lock_wait_ns;
+        task_submit_ns += child.task_submit_ns;
+        task_join_ns += child.task_join_ns;
+        task_start_delay_ns += child.task_start_delay_ns;
     }
 };
 
@@ -153,9 +153,9 @@ class RobddManager {
     //! \details The manager owns all nodes and must outlive its Robdd handles.
     RobddManager() = default;
     /** @brief Disallow copying a manager that owns canonical nodes. */
-    RobddManager(RobddManager const&) = delete;
+    RobddManager(const RobddManager&) = delete;
     /** @brief Disallow copy assignment of canonical node ownership. */
-    RobddManager& operator=(RobddManager const&) = delete;
+    RobddManager& operator=(const RobddManager&) = delete;
 
     //! \brief Return the Boolean constant false or true.
     //! \param value The truth value represented by the returned terminal.
@@ -175,55 +175,55 @@ class RobddManager {
     Robdd variable(BddVariable variable);
 
     //! \brief Return the root variable, or no value for a terminal.
-    std::optional<BddVariable> top_variable(Robdd const& value) const;
+    std::optional<BddVariable> top_variable(const Robdd& value) const;
 
     //! \brief Return the low cofactor of a non-terminal ROBDD.
     //! \details Fixes the root variable to false, propagating the
     //! complement polarity of the incoming reference to the result.
     //! \pre value must belong to this manager and be non-terminal.
-    Robdd low(Robdd const& value) const;
+    Robdd low(const Robdd& value) const;
 
     //! \brief Return the high cofactor of a non-terminal ROBDD.
     //! \details Fixes the root variable to true, propagating the
     //! complement polarity of the incoming reference to the result.
     //! \pre value must belong to this manager and be non-terminal.
-    Robdd high(Robdd const& value) const;
+    Robdd high(const Robdd& value) const;
 
     //! \brief Build a canonical decision node with the given semantic children.
     //! \details Both children must belong to this manager and all their
     //! variables must follow the supplied variable in the fixed ordering.
     //! Equal children are reduced to their shared child.
-    Robdd make_node(BddVariable variable, Robdd const& low, Robdd const& high);
+    Robdd make_node(BddVariable variable, const Robdd& low, const Robdd& high);
 
     //! \brief Distinct variables in the function, sorted by increasing index.
     //! \details A complemented root has the same support as its regular root.
-    std::vector<BddVariable> support(Robdd const& value) const;
+    std::vector<BddVariable> support(const Robdd& value) const;
 
     //! \brief Shift every supported variable by a signed offset.
     //! \details The uniform shift preserves variable order. Negative indices,
     //! overflow and the reserved terminal-order sentinel are rejected.
-    Robdd shift(Robdd const& value, std::ptrdiff_t offset);
+    Robdd shift(const Robdd& value, std::ptrdiff_t offset);
 
     //! \brief Simultaneously replace variable indices, keeping unmapped indices.
     //! \details Reordering and variable identification (non-injective maps)
     //! are supported: the result is rebuilt canonically using ITE. Source and
     //! target indices must not equal the reserved terminal-order sentinel.
-    Robdd rename(Robdd const& value, std::map<SizeType,SizeType> const& indices);
+    Robdd rename(const Robdd& value, const std::map<SizeType, SizeType>& indices);
 
     //! \brief Restrict a variable to a Boolean value, even below the root.
     //! \details Variables not in the support leave the function unchanged.
-    Robdd restrict(Robdd const& value, BddVariable variable, Bool assignment);
+    Robdd restrict(const Robdd& value, BddVariable variable, Bool assignment);
 
     //! \brief Existentially quantify the specified variables.
     //! \details Duplicate/absent variables are allowed. A complemented
     //! reference is interpreted semantically, not by negating its quantified result.
-    Robdd exists(Robdd const& value, std::vector<BddVariable> const& variables);
+    Robdd exists(const Robdd& value, const std::vector<BddVariable>& variables);
 
     //! \brief Compute exists(variables, lhs AND rhs) in one recursive traversal.
     //! \details Does not construct the full intermediate conjunction.
     Robdd and_exists(
-        Robdd const& lhs, Robdd const& rhs,
-        std::vector<BddVariable> const& variables);
+        const Robdd& lhs, const Robdd& rhs,
+        const std::vector<BddVariable>& variables);
 
     //! \brief Compute the Boolean complement of a function.
     //! \details Complemented edges make negation a constant-time polarity
@@ -231,22 +231,22 @@ class RobddManager {
     //! \param value The function to complement.
     //! \return The canonical ROBDD representing NOT value.
     //! \pre value must belong to this manager.
-    Robdd negation(Robdd const& value);
+    Robdd negation(const Robdd& value);
 
     //! \brief Compute the Boolean conjunction of two functions.
     //! \return The canonical ROBDD representing lhs AND rhs.
     //! \pre Both operands must belong to this manager.
-    Robdd conjunction(Robdd const& lhs, Robdd const& rhs);
+    Robdd conjunction(const Robdd& lhs, const Robdd& rhs);
 
     //! \brief Compute the Boolean disjunction of two functions.
     //! \return The canonical ROBDD representing lhs OR rhs.
     //! \pre Both operands must belong to this manager.
-    Robdd disjunction(Robdd const& lhs, Robdd const& rhs);
+    Robdd disjunction(const Robdd& lhs, const Robdd& rhs);
 
     //! \brief Compute the exclusive disjunction of two functions.
     //! \return The canonical ROBDD representing lhs XOR rhs.
     //! \pre Both operands must belong to this manager.
-    Robdd exclusive_or(Robdd const& lhs, Robdd const& rhs);
+    Robdd exclusive_or(const Robdd& lhs, const Robdd& rhs);
 
     //! \brief Compute the if-then-else operation on Boolean functions.
     //! \details The result represents
@@ -258,7 +258,7 @@ class RobddManager {
     //! \param else_branch The function selected where condition is false.
     //! \return The canonical ROBDD for the conditional Boolean function.
     //! \pre All three operands must belong to this manager.
-    Robdd ite(Robdd const& condition, Robdd const& then_branch, Robdd const& else_branch);
+    Robdd ite(const Robdd& condition, const Robdd& then_branch, const Robdd& else_branch);
 
     //! \brief Compute if-then-else by reducing independent cofactors in parallel.
     //! \details Opt-in bounded fork/join over the same canonical manager as ite().
@@ -269,7 +269,7 @@ class RobddManager {
     //! while the operation is in progress.
     //! \pre All three operands must belong to this manager.
     Robdd ite_parallel(
-        Robdd const& condition,Robdd const& then_branch,Robdd const& else_branch);
+        const Robdd& condition, const Robdd& then_branch, const Robdd& else_branch);
 
     //! \brief Diagnose the serial or bounded-parallel ITE on this manager.
     //! \details An explicitly instrumented recursion; never selected by ite()
@@ -278,8 +278,8 @@ class RobddManager {
     //! performance and its times must NOT be treated as production timings.
     //! The caller must not mutate the output counters until the call returns.
     Robdd ite_profiled(
-        Robdd const& condition,Robdd const& then_branch,Robdd const& else_branch,
-        Bool parallel,RobddIteProfile& counters);
+        const Robdd& condition, const Robdd& then_branch, const Robdd& else_branch,
+        Bool parallel, RobddIteProfile& counters);
 
     //! \brief Evaluate a function under a Boolean assignment.
     //! \details assignment[i] gives the truth value of variable i;
@@ -290,7 +290,7 @@ class RobddManager {
     //! \return The truth value of the function under the assignment.
     //! \pre value must belong to this manager and assignment must contain
     //! an entry for every variable in the function's support.
-    Bool evaluate(Robdd const& value, BinaryWord const& assignment) const;
+    Bool evaluate(const Robdd& value, const BinaryWord& assignment) const;
 
     //! \brief Count satisfying assignments over a finite variable universe.
     //! \details The universe contains variable_count consecutive variables
@@ -299,7 +299,7 @@ class RobddManager {
     //! once, including all valuations of unconstrained variables.
     //! Throws if the exact count cannot be represented by SizeType.
     SizeType model_count(
-        Robdd const& value, SizeType variable_count,
+        const Robdd& value, SizeType variable_count,
         SizeType first_variable_index = 0u) const;
 
     //! \brief Visit all satisfying assignments in lexicographic bit order.
@@ -309,8 +309,8 @@ class RobddManager {
     //! traversal; all results are not materialized.
     //! The callback must be nonempty and must not mutate this manager.
     void for_each_satisfying_assignment(
-        Robdd const& value, SizeType variable_count,
-        std::function<void(BinaryWord const&)> const& visitor,
+        const Robdd& value, SizeType variable_count,
+        const std::function<void(const BinaryWord&)>& visitor,
         SizeType first_variable_index = 0u) const;
 
     //! \brief Return the total number of physical non-terminal nodes allocated.
@@ -326,8 +326,8 @@ class RobddManager {
 
   private:
     using NodeRef = Robdd::NodeRef;
-    using NodeKey = std::tuple<SizeType,NodeRef,NodeRef>;
-    using IteKey = std::tuple<NodeRef,NodeRef,NodeRef>;
+    using NodeKey = std::tuple<SizeType, NodeRef, NodeRef>;
+    using IteKey = std::tuple<NodeRef, NodeRef, NodeRef>;
 
     // A hash collision must never imply canonical equality: unordered_map
     // still compares all three NodeKey members through tuple equality.
@@ -335,13 +335,12 @@ class RobddManager {
     /** @brief Hash a canonical node key without compromising full-key equality. */
     struct NodeKeyHash {
         /** @brief Compute a hash from a node's variable and its two child references. */
-        std::size_t operator()(NodeKey const& key) const noexcept {
-            constexpr std::size_t salt=
+        std::size_t operator()(const NodeKey& key) const noexcept {
+            constexpr std::size_t salt =
                 static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
-            std::size_t seed=0u;
-            auto combine=[&seed](SizeType value) {
-                seed^=std::hash<SizeType>{}(value)+salt
-                    +(seed<<6u)+(seed>>2u);
+            std::size_t seed = 0u;
+            auto combine = [&seed](SizeType value) {
+                seed ^= std::hash<SizeType>{}(value) + salt + (seed << 6u) + (seed >> 2u);
             };
             combine(std::get<0>(key));
             combine(std::get<1>(key));
@@ -360,12 +359,12 @@ class RobddManager {
     // only value copies are retained outside the manager mutex.
     /** @brief Record a cache lookup and the three cofactor splits for one ITE step. */
     struct IteStep {
-        Bool cached=false;
-        NodeRef cached_result=0u;
-        SizeType variable=0u;
-        std::pair<NodeRef,NodeRef> condition;
-        std::pair<NodeRef,NodeRef> then_branch;
-        std::pair<NodeRef,NodeRef> else_branch;
+        Bool cached = false;
+        NodeRef cached_result = 0u;
+        SizeType variable = 0u;
+        std::pair<NodeRef, NodeRef> condition;
+        std::pair<NodeRef, NodeRef> then_branch;
+        std::pair<NodeRef, NodeRef> else_branch;
     };
 
     static constexpr NodeRef FALSE_NODE = 0u;
@@ -383,7 +382,7 @@ class RobddManager {
     static NodeRef _make_regular_node_ref(SizeType index) { return (index + 1u) << 1u; }
 
     /** @brief Validate manager ownership and return the semantic root reference. */
-    NodeRef _validate(Robdd const& value) const;
+    NodeRef _validate(const Robdd& value) const;
     /** @brief Validate that the requested variable universe covers the function support. */
     SizeType _validate_variable_domain(
         NodeRef root, SizeType variable_count,
@@ -393,40 +392,40 @@ class RobddManager {
     /** @brief Return the top variable index or the terminal-order sentinel. */
     SizeType _top_variable(NodeRef ref) const;
     /** @brief Return low and high cofactors at a chosen variable. */
-    std::pair<NodeRef,NodeRef> _cofactor(NodeRef ref, SizeType variable) const;
+    std::pair<NodeRef, NodeRef> _cofactor(NodeRef ref, SizeType variable) const;
 
     /** @brief Canonicalize a decision node, reducing equal branches. */
     NodeRef _make_node(BddVariable variable, NodeRef low, NodeRef high);
     // _unlocked requires _mutex, and the wrapper acquires it.
     /** @brief Inspect the computed table and cofactor nodes while holding the manager lock. */
     IteStep _ite_lookup_split_unlocked(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
+        NodeRef condition, NodeRef then_branch, NodeRef else_branch) const;
     /** @brief Acquire the manager lock and snapshot an ITE computation step. */
     IteStep _ite_lookup_split(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch) const;
+        NodeRef condition, NodeRef then_branch, NodeRef else_branch) const;
     /** @brief Recursively compute canonical if-then-else using the computed table. */
     NodeRef _ite(NodeRef condition, NodeRef then_branch, NodeRef else_branch);
     /** @brief Compute if-then-else using bounded parallel task decomposition. */
     NodeRef _ite_parallel(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
+        NodeRef condition, NodeRef then_branch, NodeRef else_branch,
         unsigned forks_remaining);
     /** @brief Canonicalize a node while collecting synchronization statistics. */
     NodeRef _make_node_profiled(
-        BddVariable variable,NodeRef low,NodeRef high,RobddIteProfile& counters);
+        BddVariable variable, NodeRef low, NodeRef high, RobddIteProfile& counters);
     /** @brief Compute if-then-else while collecting diagnostic counters. */
     NodeRef _ite_profiled(
-        NodeRef condition,NodeRef then_branch,NodeRef else_branch,
-        RobddIteProfile& counters,unsigned forks_remaining);
+        NodeRef condition, NodeRef then_branch, NodeRef else_branch,
+        RobddIteProfile& counters, unsigned forks_remaining);
 
   private:
     mutable std::mutex _mutex;
     std::vector<Node> _nodes;
 #if defined(ARIADNE_BDD_UNIQUE_TABLE_ORDERED)
-    std::map<NodeKey,NodeRef> _unique_table;
+    std::map<NodeKey, NodeRef> _unique_table;
 #else
-    std::unordered_map<NodeKey,NodeRef,NodeKeyHash> _unique_table;
+    std::unordered_map<NodeKey, NodeRef, NodeKeyHash> _unique_table;
 #endif
-    std::map<IteKey,NodeRef> _ite_cache;
+    std::map<IteKey, NodeRef> _ite_cache;
 };
 
 } // namespace Ariadne

@@ -29,9 +29,9 @@
 #ifndef ARIADNE_BDD_HPP
 #define ARIADNE_BDD_HPP
 
-#include "ariadne-threading.hpp"
-
-#include "bdd/variable.hpp"
 #include "bdd/robdd.hpp"
+#include "bdd/variable.hpp"
+
+#include "ariadne-threading.hpp"
 
 #endif // ARIADNE_BDD_HPP

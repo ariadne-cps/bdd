@@ -28,29 +28,29 @@
 
 #include <sstream>
 
-#include "pybind11.hpp"
 #include "bdd/variable.hpp"
+#include "pybind11.hpp"
 #include "utility/binary_word.hpp"
 
 using namespace Ariadne;
 
 void bdd_variable_submodule(pybind11::module& module) {
-    pybind11::class_<BinaryWord>(module,"BinaryWord")
+    pybind11::class_<BinaryWord>(module, "BinaryWord")
         .def(pybind11::init<StringType>())
-        .def("__len__",[](BinaryWord const& word) { return word.size(); })
-        .def("__str__",[](BinaryWord const& word) {
+        .def("__len__", [](const BinaryWord& word) { return word.size(); })
+        .def("__str__", [](const BinaryWord& word) {
             std::ostringstream stream;
             stream << word;
             return stream.str();
         });
 
-    pybind11::class_<BddVariable>(module,"BddVariable")
+    pybind11::class_<BddVariable>(module, "BddVariable")
         .def(pybind11::init<SizeType>())
-        .def("index",&BddVariable::index)
-        .def("__eq__",[](BddVariable const& lhs, BddVariable const& rhs) {
-            return lhs==rhs;
+        .def("index", &BddVariable::index)
+        .def("__eq__", [](const BddVariable& lhs, const BddVariable& rhs) {
+            return lhs == rhs;
         })
-        .def("__ne__",[](BddVariable const& lhs, BddVariable const& rhs) {
-            return lhs!=rhs;
+        .def("__ne__", [](const BddVariable& lhs, const BddVariable& rhs) {
+            return lhs != rhs;
         });
 }
