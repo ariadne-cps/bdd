@@ -1,5 +1,6 @@
 # Ariadne BDD
 
+[![Format](https://github.com/ariadne-cps/bdd/actions/workflows/format.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/format.yml)
 [![macOS Status](https://github.com/ariadne-cps/bdd/actions/workflows/macos.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/macos.yml)
 [![Ubuntu Status](https://github.com/ariadne-cps/bdd/actions/workflows/ubuntu.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/ubuntu.yml)
 [![Windows](https://github.com/ariadne-cps/bdd/actions/workflows/win.yml/badge.svg)](https://github.com/ariadne-cps/bdd/actions/workflows/win.yml)
