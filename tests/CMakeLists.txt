@@ -2,7 +2,7 @@ include(CTest)
 
 add_executable(test_robdd test_robdd.cpp)
 target_link_libraries(test_robdd PRIVATE ariadne-bdd bdd ariadne-testing)
-ariadne_add_silent_test(NAME test_robdd COMMAND $<TARGET_FILE:test_robdd> --concise)
+add_test(NAME test_robdd COMMAND $<TARGET_FILE:test_robdd> --concise --logtonull)
 if(WIN32)
     set_tests_properties(test_robdd PROPERTIES
         ENVIRONMENT_MODIFICATION

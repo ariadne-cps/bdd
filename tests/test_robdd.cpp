@@ -37,6 +37,7 @@
 
 #include "bdd/robdd.hpp"
 #include "logging/logging.hpp"
+#include "logging/test_runner.hpp"
 #include "threading/thread_manager.hpp"
 #include "threading/threading_command_line_interface.hpp"
 
@@ -1303,5 +1304,5 @@ int main(int argc, char** argv) {
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_ite_profiled_concurrent_cache_publication);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_model_count_skipped_level_overflow);
     ARIADNE_TESTING_ADD_TEST(TestRobdd, test_batched_ite_cache_and_complement_semantics);
-    return ARIADNE_TESTING_RUN_TESTS_WITH_ARGS(argc, argv);
+    return Ariadne::Testing::run_logging_suite(ariadne_test_suite, argc, argv);
 }
